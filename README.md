@@ -96,15 +96,190 @@ PORT=3000 HOSTNAME=0.0.0.0 bun run start
 **Rust**. Если на хосте Rust поставить нельзя (корпоративные политики) —
 используйте готовый Docker-образ `docker/tauri.Dockerfile`: **Rust уже внутри**.
 
-### 3.1 Сборка Linux-бинарника в Docker (без Rust на хосте)
+### 3.1 Сборка десктопа в Docker (без Rust на хосте)
+
+Tauri-приложение = фронтенд (Vite+React, статический бандл) + Rust-бэкенд
+(команды для Git и ФС). IDS — клиентское приложение, поэтому порт сводится к
+двум вещам: вынести UI в Vite-оболочку и заменить localStorage-слой (`lib/store.ts`)
+на вызовы Tauri-команд. Серверной логики у IDS нет — ничего, кроме UI, не нужно.
+
+#### A. Скелет Tauri + Vite (в контейнере с Rust)
 ```bash
-# Запускаем интерактивную оболочку с Rust + зависимостями Tauri:
-docker compose --profile tauri run --rm tauri
-# Внутри контейнера (один раз):
+docker compose --profile tauri run --rm tauri   # интерактивная оболочка, Rust внутри
 npm create tauri-app@latest ids-desktop -- --template react-ts
-#  …перенести src/ из этого проекта в фронты Tauri, заменить lib/store.ts на Tauri-команды…
 cd ids-desktop
-npm install
+```
+
+#### B. Перенос фронтенда (UI из Next.js → Vite)
+Скопируйте из этого проекта в `ids-desktop/src/`:
+- `src/components/` (включая `ui/`) — целиком;
+- `src/lib/` — `types.ts`, `frontmatter.ts`, `repo.ts`, `template.ts`, `utils.ts`
+  (БЕЗ `db.ts`); `store.ts` перепишем на шаге C;
+- `src/hooks/` — `use-toast.ts`, `use-mobile.ts`;
+- `src/app/globals.css` → `ids-desktop/src/globals.css`.
+
+Точка входа (вместо Next `app/page.tsx`+`layout.tsx`). `ids-desktop/src/main.tsx`:
+```tsx
+import React from "react"
+import { createRoot } from "react-dom/client"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
+import { AppShell } from "@/components/app-shell"
+import "./globals.css"
+
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <AppShell />
+      <Toaster />
+    </ThemeProvider>
+  </React.StrictMode>
+)
+```
+`ids-desktop/index.html`:
+```html
+<!doctype html>
+<html lang="ru" suppressHydrationWarning>
+  <head><meta charset="utf-8" /><title>IDS</title></head>
+  <body><div id="root"></div></body>
+</html>
+```
+`ids-desktop/vite.config.ts` (алиас `@/` + порт для `tauri dev`):
+```ts
+import { defineConfig } from "vite"
+import react from "@vitejs/plugin-react"
+import path from "node:path"
+export default defineConfig({
+  plugins: [react()],
+  resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
+  clearScreen: false,
+  server: { port: 1420, strictPort: true },
+})
+```
+Зависимости: возьмите `dependencies` из `package.json` этого проекта (без `next`).
+Tailwind: `tailwind.config.ts`, `postcss.config.mjs`, `components.json` — как есть.
+Уберите Next-специфику: `next/font` (замените на системный шрифт или
+`@fontsource-variable/geist`), `metadata`, `app/`-роутинг, `api/route.ts`.
+
+#### C. Замена lib/store.ts на Tauri-команды
+Структуру стора оставьте, но действия замените на `invoke()` из
+`@tauri-apps/api/core`. Данные читаются из реального репозитория при старте,
+запись идёт в файлы, синхронизация — в настоящий git:
+```ts
+import { invoke } from "@tauri-apps/api/core"
+// при старте (загрузка из ФС):
+files: await invoke<Localization[]>("read_localizations"),
+repoFiles: await invoke<Record<string, string>>("read_repo_files"),
+// sync (commit message считается в TS):
+await invoke("git_sync", { commitMessage: dirtyKb.map(commitMessageFor).join("; "),
+                           authorName, authorEmail })
+// createDraft / patchFile:
+await invoke("write_file", { path: ".tmp/tmp-xxx.md", content: serializeDocument(fm, body) })
+// writeDictionary:
+await invoke("write_file", { path: ".dictionary/type.yaml", content: serializeDictYaml(values) })
+```
+Логика `commitMessageFor`, `serializeFrontmatter`, `readTemplate`, `readConfig`
+остаётся в TS — Rust только читает/пишет файлы и гоняет git.
+
+#### D. Rust-бэкенд (`src-tauri/`)
+`ids-desktop/src-tauri/Cargo.toml`:
+```toml
+[package]
+name = "ids-desktop"
+version = "0.1.0"
+edition = "2021"
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+git2 = "0.19"
+```
+`ids-desktop/src-tauri/tauri.conf.json` (фрагмент):
+```json
+{
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "beforeDevCommand": "bun run dev"
+  },
+  "app": { "windows": [{ "title": "IDS", "width": 1280, "height": 800 }] }
+}
+```
+`ids-desktop/src-tauri/src/commands.rs` (каркас команд):
+```rust
+use std::fs;
+use std::path::Path;
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct FileEntry { pub path: String, pub content: String }
+
+#[tauri::command]
+pub fn read_localizations(base: String) -> Vec<FileEntry> {
+    // скан <base>/SPAS-*/*.md — вернуть пути + содержимое; фронтенд парсит frontmatter сам
+    scan_md(&base).unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn read_repo_files(base: String) -> std::collections::HashMap<String, String> {
+    // .dictionary/*.yaml + _template/localization.md + .gitignore + .tmp/config.yaml
+    read_repo(&base).unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn write_file(base: String, path: String, content: String) -> Result<(), String> {
+    let p = Path::new(&base).join(&path);
+    if let Some(parent) = p.parent() { fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+    fs::write(p, content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_file(base: String, path: String) -> Result<(), String> {
+    fs::remove_file(Path::new(&base).join(&path)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn git_sync(base: String, commit_message: String, author_name: String, author_email: String) -> Result<(), String> {
+    let repo = git2::Repository::open(&base).map_err(|e| e.to_string())?;
+    let mut index = repo.index().map_err(|e| e.to_string())?;
+    index.add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None).map_err(|e| e.to_string())?;
+    index.write().map_err(|e| e.to_string())?;
+    let sig = git2::Signature::now(&author_name, &author_email).map_err(|e| e.to_string())?;
+    let head = repo.head().map_err(|e| e.to_string())?;
+    let parent = repo.find_commit(head.target().unwrap()).map_err(|e| e.to_string())?;
+    let tree = repo.find_tree(index.write_tree().unwrap()).map_err(|e| e.to_string())?;
+    repo.commit(Some("HEAD"), &sig, &sig, &commit_message, &tree, &[&parent]).map_err(|e| e.to_string())?;
+    let mut remote = repo.find_remote("origin").map_err(|e| e.to_string())?;
+    remote.push(&["refs/heads/main"], None).map_err(|e| e.to_string())?;
+    Ok(())
+}
+// + git_clone / git_pull / git_branches — по аналогии (см. lib/git2 docs)
+```
+`ids-desktop/src-tauri/src/lib.rs`:
+```rust
+mod commands;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            commands::read_localizations,
+            commands::read_repo_files,
+            commands::write_file,
+            commands::delete_file,
+            commands::git_sync,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri");
+}
+```
+
+#### E. Сборка
+```bash
+bun install
 bun x tauri build      # или: cargo tauri build
 # Артефакты: src-tauri/target/release/bundle/debian/*.deb,
 #            src-tauri/target/release/bundle/appimage/*.AppImage
