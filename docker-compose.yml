@@ -34,6 +34,7 @@ services:
 
   # --- Десктоп-сборка Tauri (Rust уже ВНУТРИ образа) ---
   # Запуск: docker compose --profile tauri run --rm tauri
+  # Внутри: bash tauri-skeleton/port.sh  (перенос ./src в ids-desktop + сборка)
   tauri:
     profiles: [tauri]
     build:
@@ -41,8 +42,15 @@ services:
       dockerfile: docker/tauri.Dockerfile
     working_dir: /app
     volumes:
-      - ./:/app
-      - tauri_target:/app/src-tauri/target
+      # исходники IDS (./src) + каркас (./tauri-skeleton) доступны в контейнере:
+      - ./src:/app/src:ro
+      - ./tauri-skeleton:/app/tauri-skeleton:ro
+      - ./package.json:/app/package.json:ro
+      # ids-desktop (создаётся port.sh) — на хост, чтобы не терять между запусками:
+      - ./ids-desktop:/app/ids-desktop
+      # кэш сборки Rust (тяжёлый) — отдельный том:
+      - tauri_target:/app/ids-desktop/src-tauri/target
+      - cargo_cache:/root/.cargo
     command: bash
     stdin_open: true
     tty: true
@@ -50,3 +58,4 @@ services:
 volumes:
   bun_cache:
   tauri_target:
+  cargo_cache:

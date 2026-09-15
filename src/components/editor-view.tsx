@@ -86,13 +86,22 @@ export function EditorView() {
 
   const existingNumbers = React.useMemo(() => {
     const set = new Set<string>()
+    const currentNumber = activeFile?.number ?? ""
     for (const f of files) {
-      if (f.id !== editing.fileId && f.number && !f.fileName.startsWith(".tmp/")) {
+      // дубликат = ДРУГАЯ папка с тем же номером.
+      // свой номер + siblings/parent в той же папке — не дубликат
+      // (уточнение localization-N.md легально делит номер-папку с родителем).
+      if (
+        f.id !== editing.fileId &&
+        f.number &&
+        f.number !== currentNumber &&
+        !f.fileName.startsWith(".tmp/")
+      ) {
         set.add(f.number)
       }
     }
     return [...set]
-  }, [files, editing.fileId])
+  }, [files, editing.fileId, activeFile?.number])
 
   const profileAuthor = formatAuthor(config.profile.name, config.profile.email)
 
@@ -181,10 +190,11 @@ export function EditorView() {
   function doSave() {
     if (!activeFile) return
     const wasTemp = activeFile.fileName.startsWith(".tmp/")
+    const fileName = wasTemp ? "localization.md" : activeFile.fileName
     fileToFolder()
     toast({
       title: wasTemp ? "Сохранено в базу знаний" : "Локализация сохранена",
-      description: `${fm.number}/localization.md`,
+      description: `${fm.number}/${fileName}`,
     })
   }
 
