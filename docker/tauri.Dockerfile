@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libwebkit2gtk-4.1-dev \
     build-essential curl wget file pkg-config \
-    libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+    libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev librsvg2-bin \
     libgtk-3-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
     git ca-certificates \
     && rm -rf /var/lib/apt/lists/*

@@ -1,11 +1,11 @@
-// Tauri-команды IDS: файловый слой (std::fs) + git (системный CLI).
-// Фронтенд парсит frontmatter/конфиг сам (логика в TS) — Rust только читает/пишет
-// файлы и гоняет git.
+// Tauri-команды IDS: файловый слой (std::fs) + git (системный CLI) + путь к репозиторию.
+// Фронтенд парсит frontmatter/конфиг сам — Rust только читает/пишет файлы и гоняет git.
 
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tauri::Manager;
 use serde::Serialize;
 
 #[derive(Serialize, Clone)]
@@ -18,7 +18,17 @@ fn join(base: &str, rel: &str) -> PathBuf {
     Path::new(base).join(rel)
 }
 
-/// Окружение для git: SSH-ключ через GIT_SSH_COMMAND (прочее — системный git/ssh-agent).
+/// Локальный путь к репозиторию (Tauri app_data_dir). Туда клонируется репо IDS.
+#[tauri::command]
+pub fn get_base(app: tauri::AppHandle) -> Result<String, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
 fn git_env(auth_method: &str, ssh_key: &str) -> Vec<(&'static str, String)> {
     if auth_method == "ssh" && !ssh_key.is_empty() {
         vec![(
@@ -46,8 +56,6 @@ fn run_git(env: &[(&str, String)], args: &[&str]) -> Result<String, String> {
 
 // --- Файловый слой ---
 
-/// Скан локализаций: папки базы знаний (<number>/*.md) + .tmp/*.md (черновики).
-/// Возвращает путь (относительно base) + содержимое; фронтенд парсит frontmatter.
 #[tauri::command]
 pub fn read_localizations(base: String) -> Vec<FileEntry> {
     let mut out = Vec::new();
@@ -59,7 +67,6 @@ pub fn read_localizations(base: String) -> Vec<FileEntry> {
                 continue;
             }
             let name = e.file_name().to_string_lossy().to_string();
-            // пропуск служебных
             if name.starts_with('.') || name == "_template" {
                 continue;
             }
@@ -76,7 +83,6 @@ pub fn read_localizations(base: String) -> Vec<FileEntry> {
             }
         }
     }
-    // черновики .tmp/*.md
     let tmp = root.join(".tmp");
     if let Ok(files) = fs::read_dir(&tmp) {
         for f in files.flatten() {
@@ -92,13 +98,10 @@ pub fn read_localizations(base: String) -> Vec<FileEntry> {
     out
 }
 
-/// Служебные файлы репозитория: .dictionary/*.yaml, _template/localization.md,
-/// .gitignore, .tmp/config.yaml.
 #[tauri::command]
 pub fn read_repo_files(base: String) -> HashMap<String, String> {
     let mut map = HashMap::new();
     let root = Path::new(&base);
-    // .dictionary/*
     let dict = root.join(".dictionary");
     if let Ok(entries) = fs::read_dir(&dict) {
         for e in entries.flatten() {
@@ -111,7 +114,6 @@ pub fn read_repo_files(base: String) -> HashMap<String, String> {
             }
         }
     }
-    // отдельные файлы
     for f in ["_template/localization.md", ".gitignore", ".tmp/config.yaml"] {
         let p = root.join(f);
         if let Ok(content) = fs::read_to_string(&p) {
@@ -159,7 +161,6 @@ pub fn git_pull(base: String, auth_method: String, ssh_key: String) -> Result<()
     run_git(&env, &["-C", &base, "pull", "--ff-only"]).map(|_| ())
 }
 
-/// git add -A && git commit -m <commit_message> --author <name> <email> && git push
 #[tauri::command]
 pub fn git_sync(
     base: String,
@@ -172,7 +173,6 @@ pub fn git_sync(
     let env = git_env(&auth_method, &ssh_key);
     run_git(&env, &["-C", &base, "add", "-A"])?;
     let author = format!("{} <{}>", author_name, author_email);
-    // commit может «не найти изменений» — это не ошибка
     let _ = run_git(&env, &["-C", &base, "commit", "-m", &commit_message, "--author", &author]);
     run_git(&env, &["-C", &base, "push"])?;
     Ok(())

@@ -1,4 +1,3 @@
-// Точка входа (desktop). mobile использует lib.rs -> run().
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {

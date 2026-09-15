@@ -1,11 +1,11 @@
 mod commands;
 
-// Tauri-команды, экспонируемые фронтенду через invoke().
-// ФС — std::fs; git — системный `git` (CLI). git2 не нужен.
+// Tauri-команды: ФС (std::fs) + git (CLI) + get_base (app_data_dir).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            commands::get_base,
             commands::read_localizations,
             commands::read_repo_files,
             commands::write_file,

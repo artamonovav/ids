@@ -96,47 +96,40 @@ PORT=3000 HOSTNAME=0.0.0.0 bun run start
 **Rust**. Если на хосте Rust поставить нельзя (корпоративные политики) —
 используйте готовый Docker-образ `docker/tauri.Dockerfile`: **Rust уже внутри**.
 
-### 3.1 Сборка десктопа в Docker (без Rust на хосте)
+### 3.1 Сборка десктопа под ключ (в Docker, без Rust на хосте)
 
-Tauri-приложение = фронтенд (Vite+React, статический бандл) + Rust-бэкенд
-(команды для Git и ФС). IDS — клиентское приложение, поэтому порт сводится к:
-вынести UI в Vite-оболочку и заменить localStorage-слой (`lib/store.ts`) на вызовы
-Tauri-команд. Серверной логики у IDS нет — ничего, кроме UI, не нужно.
+Полный проект Tauri лежит в [`ids-desktop/`](ids-desktop) — **ничего допиливать не нужно**:
+- фронтенд (Vite+React, `main.tsx`) + `store.tauri.ts` (полный, все действия через `invoke`);
+- Rust-бэкенд `src-tauri/` (`commands.rs`: `get_base`, `read_localizations`, `read_repo_files`,
+  `write_file`, `delete_file`, `git_clone`/`git_pull`/`git_sync`/`git_branches` на `std::fs` + системный `git`, без `git2`);
+- `build.sh` — **turnkey**: переносит `./src` IDS в `ids-desktop/src/`, генерирует иконки из `logo.svg`, ставит deps, собирает `tauri build`.
 
-Все каркасы лежат в каталоге [`tauri-skeleton/`](tauri-skeleton):
-- `main.tsx`, `index.html`, `vite.config.ts` — точка входа Vite;
-- `store.tauri.ts` — темплейт `lib/store.ts` на `invoke()` (ФС + git);
-- `src-tauri/` — Rust-бэкенд (`Cargo.toml`, `tauri.conf.json`, `src/{main,lib,commands}.rs`);
-- `port.sh` — скрипт переноса исходников IDS в `ids-desktop`.
+Команды бэкенда используют `std::fs` (файлы) и системный `git` (CLI); SSH-ключ — через `GIT_SSH_COMMAND`.
 
-Команды бэкенда (`commands.rs`) используют `std::fs` (файлы) и системный `git` (CLI)
-— `git2` НЕ нужен; SSH-ключ подставляется через `GIT_SSH_COMMAND`.
-
-#### Быстрый старт (в Docker)
+#### Запуск (одна команда в Docker)
 ```bash
 # 1. Запускаем оболочку с Rust+webkit+node+bun (Rust уже ВНУТРИ — на хост не нужен):
 docker compose --profile tauri run --rm tauri
 
-# 2. Внутри контейнера: скелет + перенос ./src в ids-desktop + установка зависимостей:
-bash tauri-skeleton/port.sh
-
-# 3. Сборка:
-cd ids-desktop
-bun x tauri dev     # отладка — откроется окно
-bun x tauri build   # релиз -> src-tauri/target/release/bundle/{debian,appimage}
+# 2. Внутри контейнера — turnkey-сборка (перенос ./src + иконки + deps + tauri build):
+cd ids-desktop && bash build.sh
 ```
-В docker-compose каталог `./src` проброшен в контейнер (`/app/src`), `ids-desktop/`
-и кэш Rust (`tauri_target`, `cargo_cache`) — в отдельных томах.
+Артефакты: `ids-desktop/src-tauri/target/release/bundle/{debian/*.deb, appimage/*.AppImage}`.
+Установите `.deb`/`.AppImage` или запустите `./ids-desktop/src-tauri/target/release/ids-desktop`.
 
-#### Что доработать вручную (после port.sh)
-- **Иконки** — положите `ids-desktop/src-tauri/icons/{32x32.png,128x128.png,icon.icns,icon.ico}`.
-- **`store.tauri.ts`** — допилите `upsertFile`/`clarify`/`removeFile`/`writeDictionary`/
-  `writeTemplateFile`/`completeSetup` по аналогии с `init`/`createDraft`/`patchFile`/`sync`
-  (тела есть в веб-`lib/store.ts` — замените `set(...)` на `invoke + локальный set`).
-- **HTTPS-аутентификация** — `git` CLI берёт токен из URL (`https://user:token@host/...`)
-  или системного credential helper; SSH — через `GIT_SSH_COMMAND` (уже в `commands.rs`).
-- **commit-сообщения** при `git_sync` считаются во фронте (`commitMessageFor`) и
-  передаются в Rust: `[<номер>] Создана/Обновлена/Уточнение(N)`.
+> `build.sh` копирует фронтенд из `../src` (проброшен в контейнер), генерирует иконки
+> из `../public/logo.svg` (`rsvg-convert` → `tauri icon`), и собирает релиз. Кэш Rust
+> (`tauri_target`, `cargo_cache`) — в отдельных томах, повторная сборка быстрее.
+
+#### Отладка (с окном)
+```bash
+docker compose --profile tauri run --rm tauri
+cd ids-desktop && bash build.sh   # один раз — поставит deps + иконки
+bun x tauri dev                   # hot-reload, откроется окно приложения
+```
+
+> **Важно:** проект собирался в среде без Rust (песочница), поэтому компиляция Rust
+> здесь не проверена. Если `tauri build` упадёт с ошибкой — пришлите вывод, поправлю.
 
 ### 3.2 Системные зависимости Tauri (если собирать на хосте, а не в Docker)
 ```bash

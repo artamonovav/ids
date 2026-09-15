@@ -6,13 +6,15 @@ services:
   dev:
     image: oven/bun:1
     working_dir: /app
-    command: sh -c "bun install --frozen-lockfile && bun run dev"
+    # next dev биндим на 0.0.0.0 — иначе в контейнере слушает 127.0.0.1 и недоступен с хоста
+    command: sh -c "bun install --frozen-lockfile && ./node_modules/.bin/next dev -p 3000 -H 0.0.0.0"
     ports:
       - "3000:3000"
     volumes:
       - ./:/app
       - bun_cache:/root/.bun
     environment:
+      - HOSTNAME=0.0.0.0
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
       - NEXT_TELEMETRY_DISABLED=1
@@ -42,11 +44,9 @@ services:
       dockerfile: docker/tauri.Dockerfile
     working_dir: /app
     volumes:
-      # исходники IDS (./src) + каркас (./tauri-skeleton) доступны в контейнере:
+      # исходники IDS (./src, ./public) + ids-desktop — доступны в контейнере:
       - ./src:/app/src:ro
-      - ./tauri-skeleton:/app/tauri-skeleton:ro
-      - ./package.json:/app/package.json:ro
-      # ids-desktop (создаётся port.sh) — на хост, чтобы не терять между запусками:
+      - ./public:/app/public:ro
       - ./ids-desktop:/app/ids-desktop
       # кэш сборки Rust (тяжёлый) — отдельный том:
       - tauri_target:/app/ids-desktop/src-tauri/target
