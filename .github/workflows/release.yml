@@ -1,16 +1,13 @@
 name: Release (Tauri desktop)
 
 # Сборка десктоп-бинарников IDS через Tauri 2 под Windows / macOS / Linux.
+# Требует src-tauri/ (проект Tauri). Пока его нет — сборка аккуратно пропускается
+# (шаг «Проверка наличия src-tauri» после checkout). Создать src-tauri: README 3.1.
 #
-# Требует наличия src-tauri/ (проект Tauri). Пока его нет — джобы ПРОПУСКАЮТСЯ
-# (guard hashFiles('src-tauri/tauri.conf.json')), т.е. ничего не ломают.
-# Создать src-tauri: см. README раздел «Десктоп-приложение (Tauri)».
+# Запуск: git tag v0.1.0 && git push origin v0.1.0
 #
-# Запуск: создать git-тег вида v* — GitHub соберёт артефакты и приложит их к Release.
-#   git tag v0.1.0 && git push origin v0.1.0
-#
-# На винде/macOS Rust предустановлен в runner; на Linux — ставится через dtolnay/rust-toolchain.
-# Cross-компиляция между ОС невозможна — поэтому matrix по runner'ам.
+# Примечание: hashFiles() НЕ работает на уровне jobs.<id>.if — поэтому проверка
+# делается отдельным шагом (shell: bash) после checkout.
 
 on:
   push:
@@ -22,7 +19,6 @@ permissions:
 
 jobs:
   build:
-    if: ${{ hashFiles('src-tauri/tauri.conf.json') != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -33,19 +29,36 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Проверка наличия src-tauri
+        id: tauri_exists
+        shell: bash
+        run: |
+          if [ -f src-tauri/tauri.conf.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::src-tauri/tauri.conf.json не найден — сборка пропущена. Создайте Tauri-проект (README 3.1)."
+          fi
+
       - uses: oven-sh/setup-bun@v2
+        if: steps.tauri_exists.outputs.exists == 'true'
       - uses: actions/setup-node@v4
+        if: steps.tauri_exists.outputs.exists == 'true'
         with:
           node-version: 20
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.tauri_exists.outputs.exists == 'true'
       - name: Linux system deps (webkit2gtk-4.1)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: steps.tauri_exists.outputs.exists == 'true' && matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - run: bun install --frozen-lockfile
+        if: steps.tauri_exists.outputs.exists == 'true'
       - uses: tauri-apps/tauri-action@v0
+        if: steps.tauri_exists.outputs.exists == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
