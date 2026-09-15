@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useTheme } from "next-themes"
 import { useStore } from "@/lib/store"
+import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import {
   BookText,
@@ -76,6 +77,13 @@ export function AppShell() {
   const sync = useStore((s) => s.sync)
   const syncing = useStore((s) => s.syncing)
   const editingActive = useStore((s) => s.view === "editor" && !!s.editing.fileId)
+  const { toast } = useToast()
+
+  async function handleSync() {
+    await sync()
+    const msg = useStore.getState().lastCommitMessage
+    toast({ title: "Синхронизировано", description: msg ?? "Нет изменений для отправки" })
+  }
 
   if (!setupComplete) return <SetupWizard />
 
@@ -139,7 +147,7 @@ export function AppShell() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => sync()}
+              onClick={handleSync}
               disabled={syncing}
             >
               <RefreshCw className={cn("size-3.5", syncing && "animate-spin")} />

@@ -51,6 +51,8 @@ export interface Localization {
   createdAt: number
   updatedAt: number
   dirty: boolean
+  /** Была ли локализация уже отправлена в Git (для commit-сообщения: Создана/Обновлена). */
+  synced: boolean
 }
 
 export interface Profile {

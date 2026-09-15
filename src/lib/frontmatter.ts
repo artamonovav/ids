@@ -2,7 +2,7 @@
 // Гарантирует порядок полей и комментарии из эталонного шаблона
 // (js-yaml и gray-matter не сохраняют комментарии и порядок в общем виде).
 
-import type { Frontmatter } from "./types"
+import type { Frontmatter, Localization } from "./types"
 
 // Комментарии точно из эталонного шаблона.
 const COMMENT = {
@@ -211,4 +211,18 @@ export function nextNumber(numbers: string[]): string {
 export function clarifyIndex(fileName: string): number | null {
   const m = /^localization-(\d+)\.md$/.exec(fileName)
   return m ? parseInt(m[1], 10) : null
+}
+
+/**
+ * Commit-сообщение для синхронизации файла локализации с Git.
+ *  - уточнение (localization-N.md): [<номер>] Уточнение локализации (N)
+ *  - новая (первая отправка):       [<номер>] Создана локализация
+ *  - правка существующей:           [<номер>] Обновлена локализация
+ */
+export function commitMessageFor(file: Localization): string {
+  const num = file.number || "Без-номера"
+  const idx = clarifyIndex(file.fileName)
+  if (file.parentId && idx) return `[${num}] Уточнение локализации (${idx})`
+  if (!file.synced) return `[${num}] Создана локализация`
+  return `[${num}] Обновлена локализация`
 }

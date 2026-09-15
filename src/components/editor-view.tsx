@@ -121,11 +121,15 @@ export function EditorView() {
     if (!isTmp) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
+      const current = useStore.getState().files.find((f) => f.id === activeFile.id)
+      if (!current) return
+      // если файл уже перенесён в базу знаний — автосохранение .tmp его не трогает
+      if (!current.fileName.startsWith(".tmp/") && current.number) return
       const spaceCode = readConfig(useStore.getState().repoFiles).profile.spaceCode || "SPAS"
       const defaultPrefix = `${spaceCode}-`
       const num = fm.number.trim()
-      const fileName = num && num !== defaultPrefix ? `.tmp/${num}.md` : activeFile.fileName
-      patchFile(activeFile.id, { frontmatter: fm, body, attachments, fileName })
+      const fileName = num && num !== defaultPrefix ? `.tmp/${num}.md` : current.fileName
+      patchFile(current.id, { frontmatter: fm, body, attachments, fileName })
     }, 2000)
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current)

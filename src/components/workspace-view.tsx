@@ -176,6 +176,12 @@ export function WorkspaceView() {
     clarify()
   }
 
+  async function handleSync() {
+    await sync()
+    const msg = useStore.getState().lastCommitMessage
+    toast({ title: "Синхронизировано", description: msg ?? "Нет изменений для отправки" })
+  }
+
   function confirmDelete() {
     if (!deleteTarget) return
     deleteTarget.run()
@@ -214,7 +220,7 @@ export function WorkspaceView() {
         </div>
         <div className="flex items-center gap-2">
           <StatusPill />
-          <Button variant="outline" size="sm" onClick={() => sync()} disabled={syncing}>
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
             <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
             Синхронизировать
           </Button>

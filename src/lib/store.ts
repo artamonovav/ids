@@ -16,7 +16,7 @@ import type {
   DictName,
 } from "./types"
 import { TEMPLATE_BODY } from "./template"
-import { formatAuthor } from "./frontmatter"
+import { formatAuthor, commitMessageFor } from "./frontmatter"
 import {
   buildSeedRepoFiles,
   readTemplate,
@@ -100,6 +100,7 @@ ERROR  jwt.verify: signature is invalid
     createdAt: SEED_T - DAY * 3,
     updatedAt: SEED_T - HOUR * 5,
     dirty: false,
+    synced: true,
   },
   {
     id: "seed-2",
@@ -140,6 +141,7 @@ ERROR  jwt.verify: signature is invalid
     createdAt: SEED_T - DAY * 2,
     updatedAt: SEED_T - HOUR * 2,
     dirty: false,
+    synced: true,
   },
 ]
 
@@ -159,6 +161,7 @@ interface State {
   syncStatus: SyncStatus
   syncError: string | null
   syncing: boolean
+  lastCommitMessage: string | null
 
   // навигация
   setView: (v: View) => void
@@ -200,6 +203,7 @@ export const useStore = create<State>()(
       syncStatus: "green",
       syncError: null,
       syncing: false,
+      lastCommitMessage: null,
 
       setView: (v) => set({ view: v }),
       openFolder: (number) => {
@@ -232,6 +236,7 @@ export const useStore = create<State>()(
           createdAt: now(),
           updatedAt: now(),
           dirty: true,
+          synced: false,
         }
         set((s) => ({
           files: [...s.files, file],
@@ -303,6 +308,7 @@ export const useStore = create<State>()(
           createdAt: now(),
           updatedAt: now(),
           dirty: true,
+          synced: false,
         }
         set((s) => ({
           files: [...s.files, file],
@@ -335,11 +341,20 @@ export const useStore = create<State>()(
         }
         set({ syncing: true, syncError: null })
         await new Promise((r) => setTimeout(r, 1100))
+        const dirtyKb = get().files.filter(
+          (f) => f.dirty && f.number && !f.fileName.startsWith(".tmp/")
+        )
+        const messages = dirtyKb.map(commitMessageFor)
         set((s) => ({
           syncing: false,
           syncStatus: "green",
           syncError: null,
-          files: s.files.map((f) => ({ ...f, dirty: false })),
+          files: s.files.map((f) =>
+            f.dirty && f.number && !f.fileName.startsWith(".tmp/")
+              ? { ...f, dirty: false, synced: true }
+              : f
+          ),
+          lastCommitMessage: messages.length ? messages.join("; ") : null,
         }))
       },
 
@@ -367,7 +382,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "spas-kb-store",
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const s = (persisted as Record<string, unknown>) ?? {}
         if (version < 2 || !s.repoFiles) {
@@ -405,6 +420,11 @@ export const useStore = create<State>()(
               offline: settings.offline === true,
             }
           }
+        }
+        if (version < 5) {
+          // поле synced (для commit-сообщений): clean→synced, dirty→unsynced
+          const files = (s.files as Localization[]) ?? []
+          s.files = files.map((f) => ({ ...f, synced: f.synced ?? !f.dirty }))
         }
         return s as unknown as State
       },
