@@ -1,0 +1,52 @@
+# SPAS Knowledge Base — Docker Compose
+# Запускайте ОДНУ из служб dev/app (обе слушают порт 3000).
+
+services:
+  # --- Разработка с hot-reload ---
+  dev:
+    image: oven/bun:1
+    working_dir: /app
+    command: sh -c "bun install --frozen-lockfile && bun run dev"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/app
+      - bun_cache:/root/.bun
+    environment:
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+      - NEXT_TELEMETRY_DISABLED=1
+    stdin_open: true
+    tty: true
+
+  # --- Production-сборка + запуск ---
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ids:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+    restart: unless-stopped
+
+  # --- Десктоп-сборка Tauri (Rust уже ВНУТРИ образа) ---
+  # Запуск: docker compose --profile tauri run --rm tauri
+  tauri:
+    profiles: [tauri]
+    build:
+      context: .
+      dockerfile: docker/tauri.Dockerfile
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - tauri_target:/app/src-tauri/target
+    command: bash
+    stdin_open: true
+    tty: true
+
+volumes:
+  bun_cache:
+  tauri_target:

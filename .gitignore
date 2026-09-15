@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Build
+dist/
+
+# Logs
+*.log
+
+# Env
+.env
+.env*
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# IDS: временные черновики и локальный конфиг (gitignored, не синхронизируются)
+.tmp/
