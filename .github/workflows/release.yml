@@ -1,0 +1,55 @@
+name: Release (Tauri desktop)
+
+# Сборка десктоп-бинарников IDS через Tauri 2 под Windows / macOS / Linux.
+#
+# Требует наличия src-tauri/ (проект Tauri). Пока его нет — джобы ПРОПУСКАЮТСЯ
+# (guard hashFiles('src-tauri/tauri.conf.json')), т.е. ничего не ломают.
+# Создать src-tauri: см. README раздел «Десктоп-приложение (Tauri)».
+#
+# Запуск: создать git-тег вида v* — GitHub соберёт артефакты и приложит их к Release.
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# На винде/macOS Rust предустановлен в runner; на Linux — ставится через dtolnay/rust-toolchain.
+# Cross-компиляция между ОС невозможна — поэтому matrix по runner'ам.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: ${{ hashFiles('src-tauri/tauri.conf.json') != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+          - platform: windows-latest
+          - platform: macos-latest
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux system deps (webkit2gtk-4.1)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: bun install --frozen-lockfile
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "IDS ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false

@@ -184,3 +184,39 @@ docker-compose.yml    dev + app + tauri
   на хосте нужен пакет `libwebkit2gtk-4.1-dev`.
 - **Корпоративный прокси** — `docker build --build-arg HTTP_PROXY=...` и
   `bun config` / `npm config` для реестров.
+
+## 8. CI / Автоматизация (GitHub Actions)
+
+В `.github/workflows/` два сценария:
+
+### 8.1 `ci.yml` — проверка веб-приложения (lint + build)
+Запускается на каждый push в `main`/`master` и на PR. Ставит Bun, делает
+`bun install --frozen-lockfile`, `bun run lint`, `bun run build`. Rust не нужен.
+Зелёная галка = приложение собирается и проходит линт.
+
+### 8.2 `release.yml` — сборка десктоп-бинарников Tauri (Windows / macOS / Linux)
+Запускается при создании git-тега вида `v*`. На каждой ОС ставится Rust (на
+Linux — +webkit2gtk-4.1), собирается Tauri через `tauri-apps/tauri-action`, и
+артефакты (`.msi`/`.exe`, `.app`/`.dmg`, `.deb`/`.AppImage`) прикладываются к
+GitHub Release как черновик.
+
+**Важно:** release-джобы работают только при наличии `src-tauri/tauri.conf.json`
+(guard `hashFiles`). Пока Tauri-проект не создан — джобы пропускаются и ничего не
+ломают. Как создать `src-tauri` — см. раздел 3.1.
+
+### 8.3 Как пользоваться
+```bash
+# 1. Запушить репозиторий на GitHub:
+git remote add origin git@github.com:<org>/ids.git
+git push -u origin main        # запустится ci.yml (lint + build)
+
+# 2. (опционально) Создать src-tauri для десктопа — см. раздел 3.1, закоммитить.
+
+# 3. Выпустить релиз десктоп-бинарников:
+git tag v0.1.0
+git push origin v0.1.0         # запустится release.yml → Release с артефактами
+```
+
+Если `bun.lock` меняется — коммитьте его, иначе `--frozen-lockfile` в CI упадёт
+(так и задумано — воспроизводимость сборок).
+
