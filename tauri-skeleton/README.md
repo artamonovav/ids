@@ -33,7 +33,10 @@ bun x tauri build                                   # -> .deb / .AppImage
 ```
 
 ## Что доработать вручную
-- **Иконки** — положите `icons/{32x32.png,128x128.png,icon.icns,icon.ico}` в `ids-desktop/src-tauri/`.
+- **Иконки** — источник `public/logo.svg` (логотип IDS). Конвертируйте в PNG 1024×1024
+  (`rsvg-convert -w 1024 -h 1024 public/logo.svg > icon.png` — пакет `librsvg2-bin`,
+  или Inkscape/ImageMagick), затем `bun x tauri icon icon.png` — сгенерирует все
+  размеры (`32x32.png`, `128x128.png`, `icon.icns`, `icon.ico`) в `src-tauri/icons/`.
 - **`store.tauri.ts`** — допилите `upsertFile`/`clarify`/`removeFile`/`writeDictionary`/
   `writeTemplateFile`/`completeSetup` по аналогии с `init`/`createDraft`/`patchFile`/`sync`
   (тела есть в веб-`lib/store.ts` — замените `set(...)` на `invoke + локальный set`).

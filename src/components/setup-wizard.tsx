@@ -26,7 +26,6 @@ import {
   CheckCircle2,
   Loader2,
   Plug,
-  BookText,
 } from "lucide-react"
 import type { AuthMethod, RepoConfig } from "@/lib/types"
 
@@ -126,9 +125,7 @@ export function SetupWizard() {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col items-center justify-center px-4 py-10">
       <div className="mb-8 flex flex-col items-center gap-2 text-center">
-        <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <BookText className="size-6" />
-        </div>
+        <img src="/logo.svg" alt="IDS" className="size-12" />
         <h1 className="text-2xl font-semibold tracking-tight">
           IDS · Мастер настройки
         </h1>

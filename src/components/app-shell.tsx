@@ -6,7 +6,6 @@ import { useStore } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import {
-  BookText,
   LayoutGrid,
   Settings as SettingsIcon,
   Sun,
@@ -92,9 +91,7 @@ export function AppShell() {
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
         <div className="mx-auto flex h-12 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <BookText className="size-4.5" />
-            </div>
+            <img src="/logo.svg" alt="IDS" className="size-8" />
             <div className="leading-tight">
               <p className="text-sm font-semibold">IDS</p>
               <p className="hidden text-[11px] text-muted-foreground sm:block">
