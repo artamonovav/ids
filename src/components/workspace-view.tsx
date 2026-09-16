@@ -119,19 +119,15 @@ export function WorkspaceView() {
     () => files.filter((f) => f.number === ""),
     [files]
   )
-  const draftsCount = React.useMemo(
-    () => folders.filter((f) => f.files.some((x) => x.dirty)).length + tempDrafts.length,
-    [folders, tempDrafts]
-  )
+  // Черновики = только несохранённые .tmp-темпы (number === "").
+  // Сохранённые локализации (даже несинхронизированные, dirty) — это уже локализации,
+  // они в «Последние/Все» с точкой синхронизации, а НЕ в «Черновиках».
+  const draftsCount = tempDrafts.length
 
   const term = q.trim().toLowerCase()
 
   const baseFolders = React.useMemo(() => {
-    if (mode === "drafts") {
-      return folders
-        .filter((f) => f.files.some((x) => x.dirty))
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-    }
+    if (mode === "drafts") return []
     if (mode === "recent") {
       return [...folders].sort((a, b) => b.updatedAt - a.updatedAt)
     }
@@ -270,7 +266,7 @@ export function WorkspaceView() {
           <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-center">
             <p className="text-sm text-muted-foreground">
               {mode === "drafts"
-                ? "Нет несинхронизированных черновиков."
+                ? "Нет черновиков во временной папке (.tmp)."
                 : term || type !== "all"
                   ? "Локализации не найдены. Измените запрос."
                   : "Локализации отсутствуют."}
@@ -429,7 +425,7 @@ export function WorkspaceView() {
               </p>
             </div>
           )}
-          {mode !== "all" && filteredFolders.length <= limit && filteredFolders.length < folders.length && (
+          {mode === "recent" && filteredFolders.length <= limit && filteredFolders.length < folders.length && (
             <p className="text-center text-[11px] text-muted-foreground">
               Показано {visibleFolders.length} из {folders.length} в базе
             </p>
