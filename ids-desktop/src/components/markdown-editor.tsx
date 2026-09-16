@@ -28,6 +28,8 @@ import {
 import { Separator } from '@/components/ui/separator'
 
 import type { Attachment } from '@/lib/types'
+import { readImage } from '@tauri-apps/plugin-clipboard-manager'
+import type { Image } from '@tauri-apps/api/image'
 
 interface MarkdownEditorProps {
   value: string
@@ -64,6 +66,49 @@ interface MdComponentProps {
   src?: string
   alt?: string
   href?: string
+}
+
+/** Имя для нового файла-изображения: image-YYYY-MM-DD-HH-MM-<rand>.png */
+function genImageName(): string {
+  const d = new Date()
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  const rand = Math.random().toString(36).slice(2, 6)
+  return `image-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+    d.getDate(),
+  )}-${pad(d.getHours())}-${pad(d.getMinutes())}-${rand}.png`
+}
+
+/**
+ * Конвертация Tauri Image (raw RGBA) → PNG data URL через canvas.
+ *
+ * readImage() плагина clipboard-manager возвращает @tauri-apps/api Image с
+ * RGBA-байтами; canvas.toDataURL кодирует в PNG для записи на диск и превью.
+ *
+ * Контекст: на Linux/WebKit2GTK (Ubuntu 22.04) clipboardData.items НЕ экспонирует
+ * image-айтем при Ctrl+V картинки — этот fallback читает системный буфер обмена
+ * через Tauri (под капотом arboard: X11 на Ubuntu 22.04 по умолчанию).
+ */
+async function tauriImageToDataUrl(img: Image): Promise<string | null> {
+  try {
+    const [{ width, height }, rgba] = await Promise.all([img.size(), img.rgba()])
+    if (!width || !height || rgba.length === 0) return null
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height)
+    ctx.putImageData(imageData, 0, 0)
+    return canvas.toDataURL('image/png')
+  } catch {
+    return null
+  } finally {
+    try {
+      await img.close()
+    } catch {
+      /* best-effort cleanup native resource */
+    }
+  }
 }
 
 function ToolbarButton({
@@ -172,35 +217,36 @@ export function MarkdownEditor({
     [value, onChange, restoreSelection],
   )
 
+  const insertImageAttachment = React.useCallback(
+    (name: string, dataUrl: string) => {
+      const path = `attachments/${name}`
+      onAddAttachment?.({ path, name, dataUrl })
+      const insert = `![${name}](${path})`
+      const ta = textareaRef.current
+      if (!ta) {
+        onChange(value + insert)
+        return
+      }
+      const start = ta.selectionStart
+      const end = ta.selectionEnd
+      const newValue = value.slice(0, start) + insert + value.slice(end)
+      onChange(newValue)
+      const newCursor = start + insert.length
+      restoreSelection(newCursor, newCursor)
+    },
+    [value, onChange, onAddAttachment, restoreSelection],
+  )
+
   const handleImageFile = React.useCallback(
     (file: File) => {
       const reader = new FileReader()
       reader.onload = () => {
         const dataUrl = typeof reader.result === 'string' ? reader.result : ''
-        const d = new Date()
-        const pad = (n: number) => n.toString().padStart(2, '0')
-        const rand = Math.random().toString(36).slice(2, 6)
-        const name = `image-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
-          d.getDate(),
-        )}-${pad(d.getHours())}-${pad(d.getMinutes())}-${rand}.png`
-        const path = `attachments/${name}`
-        onAddAttachment?.({ path, name, dataUrl })
-        const insert = `![${name}](${path})`
-        const ta = textareaRef.current
-        if (!ta) {
-          onChange(value + insert)
-          return
-        }
-        const start = ta.selectionStart
-        const end = ta.selectionEnd
-        const newValue = value.slice(0, start) + insert + value.slice(end)
-        onChange(newValue)
-        const newCursor = start + insert.length
-        restoreSelection(newCursor, newCursor)
+        if (dataUrl) insertImageAttachment(genImageName(), dataUrl)
       }
       reader.readAsDataURL(file)
     },
-    [value, onChange, onAddAttachment, restoreSelection],
+    [insertImageAttachment],
   )
 
   const handleFileAttachment = React.useCallback(
@@ -228,23 +274,49 @@ export function MarkdownEditor({
   )
 
   const onPaste = React.useCallback(
-    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const items = e.clipboardData?.items
-      if (!items) return
-      let handled = false
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i]
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile()
-          if (file) {
-            handleImageFile(file)
-            handled = true
+      // 1. Ищем image-файл в clipboardData (Windows WebView2 / macOS — современный WebKit
+      //    экспонирует картинку как File item). Нашли → вставляем, preventDefault.
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i]
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile()
+            if (file) {
+              e.preventDefault()
+              handleImageFile(file)
+              return
+            }
           }
         }
+        // 2. Если в буфере есть текст — отдаём браузеру (обычная вставка текста).
+        //    На Linux при Ctrl+V текста мы НЕ должны пытаться читать картинку.
+        let hasText = false
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].kind === 'string') {
+            hasText = true
+            break
+          }
+        }
+        if (hasText) return // пусть браузер вставит текст
       }
-      if (handled) e.preventDefault()
+      // 3. Нет image-файла и нет текста в clipboardData → возможно, в буфере картинка,
+      //    но WebKit2GTK (Ubuntu 22.04) не экспонирует её как File item. preventDefault
+      //    СИНХРОННО (иначе текст вставится), затем асинхронно читаем буфер через Tauri.
+      e.preventDefault()
+      try {
+        const img = await readImage()
+        const dataUrl = await tauriImageToDataUrl(img)
+        if (dataUrl) {
+          insertImageAttachment(genImageName(), dataUrl)
+        }
+      } catch {
+        // Нет картинки в буфере или Tauri-плагин недоступен — вставка предотвращена,
+        // ничего не добавлено. Пользователь может вставить через кнопку «Изображение».
+      }
     },
-    [handleImageFile],
+    [handleImageFile, insertImageAttachment],
   )
 
   const onDrop = React.useCallback(

@@ -49,9 +49,14 @@ function parseFileEntries(entries: FileEntry[]): Localization[] {
       number = ""
       fileName = e.path  // .tmp/xxx.md
     }
-    const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(e.content)
+    // Нормализуем CRLF → LF: на Windows git checkout с core.autocrlf=true
+    // (или редактор типа Notepad) делает файлы с \r\n — без нормализации
+    // regex ниже не матчит `---\r\n`, m=null, и весь файл (включая frontmatter)
+    // уходит в body. Это и есть баг "frontmatter попадает в тело" на Windows.
+    const content = e.content.replace(/\r\n/g, "\n")
+    const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(content)
     const frontmatter = m ? parseFrontmatter(m[1]) : { ...EMPTY_FRONTMATTER }
-    const body = m ? m[2].replace(/^\n+/, "") : e.content
+    const body = m ? m[2].replace(/^\n+/, "") : content
     result.push({
       id: e.path,
       number,

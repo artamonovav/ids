@@ -110,7 +110,11 @@ export function serializeFrontmatter(fm: Frontmatter): string {
 }
 
 export function serializeDocument(fm: Frontmatter, body: string): string {
-  return `---\n${serializeFrontmatter(fm)}\n---\n\n${body.replace(/\n*$/, "")}\n`
+  // Нормализуем CRLF → LF в body: гарантия LF-окончаний в файле независимо
+  // от платформы (на Windows textarea/редактор может давать \r\n). Это
+  // дополняет CRLF-нормализацию при чтении — файлы всегда в LF.
+  const normBody = body.replace(/\r\n/g, "\n").replace(/\n*$/, "")
+  return `---\n${serializeFrontmatter(fm)}\n---\n\n${normBody}\n`
 }
 
 // --- Парсер (упрощённый, под наш фиксированный schema) -------------------

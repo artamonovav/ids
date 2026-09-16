@@ -1,0 +1,23 @@
+# Принудительно LF в working tree на всех платформах.
+# Без этого git на Windows с core.autocrlf=true делает файлы с \r\n,
+# и парсер frontmatter (regex на `---\n`) падал — frontmatter уходил в body.
+# text=auto eol=lf: git нормализует все текстовые файлы к LF при checkout,
+# независимо от настройки core.autocrlf пользователя.
+* text=auto eol=lf
+
+# Бинарные файлы — без нормализации (иначе imagemagick/бинарники портятся).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.deb binary
+*.msi binary
+*.dmg binary
+*.AppImage binary

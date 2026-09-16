@@ -1,7 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
-  "description": "IDS desktop — доступ к ФС и git через собственные команды.",
+  "description": "IDS desktop — доступ к ФС, git и чтению изображений из буфера обмена (Ctrl+V на Linux/WebKit2GTK).",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "clipboard-manager:allow-read-image"
+  ]
 }

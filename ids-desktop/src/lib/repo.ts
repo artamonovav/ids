@@ -162,9 +162,11 @@ export function readTemplate(
   if (!content) {
     return { frontmatter: { ...EMPTY_FRONTMATTER }, body: TEMPLATE_BODY }
   }
-  const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(content)
+  // Нормализуем CRLF → LF (Windows: git autocrlf / текстовые редакторы).
+  const normalized = content.replace(/\r\n/g, "\n")
+  const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(normalized)
   if (!m) {
-    return { frontmatter: { ...EMPTY_FRONTMATTER }, body: content }
+    return { frontmatter: { ...EMPTY_FRONTMATTER }, body: normalized }
   }
   return {
     frontmatter: parseFrontmatter(m[1]),
