@@ -106,6 +106,7 @@ export function WorkspaceView() {
   const clarify = useStore((s) => s.clarify)
   const removeFolderDrafts = useStore((s) => s.removeFolderDrafts)
   const removeFile = useStore((s) => s.removeFile)
+  const recentLimit = useStore((s) => s.recentLimit)
   const { toast } = useToast()
 
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null)
@@ -163,7 +164,9 @@ export function WorkspaceView() {
   }, [mode, q, type])
 
   const showTemps = mode === "drafts"
-  const visibleFolders = filteredFolders.slice(0, limit)
+  const visibleFolders = mode === "recent"
+    ? filteredFolders.slice(0, recentLimit)
+    : filteredFolders.slice(0, limit)
   const hasAny =
     visibleFolders.length > 0 || (showTemps && filteredTemps.length > 0)
 
@@ -415,7 +418,7 @@ export function WorkspaceView() {
             </div>
           )}
 
-          {filteredFolders.length > limit && (
+          {mode === "all" && filteredFolders.length > limit && (
             <div className="flex flex-col items-center gap-1 py-2 text-center">
               <Button variant="outline" size="sm" onClick={() => setLimit((l) => l + PAGE)}>
                 Показать ещё (ещё {filteredFolders.length - limit})
@@ -425,7 +428,7 @@ export function WorkspaceView() {
               </p>
             </div>
           )}
-          {mode === "recent" && filteredFolders.length <= limit && filteredFolders.length < folders.length && (
+          {mode === "recent" && filteredFolders.length > recentLimit && (
             <p className="text-center text-[11px] text-muted-foreground">
               Показано {visibleFolders.length} из {folders.length} в базе
             </p>

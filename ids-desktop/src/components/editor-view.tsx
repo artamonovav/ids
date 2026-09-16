@@ -169,7 +169,7 @@ export function EditorView() {
   }
 
   /** Файлирует локализацию: .tmp → папка базы знаний (или обновление существующей). */
-  function fileToFolder() {
+  async function fileToFolder() {
     if (!activeFile) return
     const wasTemp = activeFile.fileName.startsWith(".tmp/")
     const fileName = wasTemp ? "localization.md" : activeFile.fileName
@@ -183,15 +183,15 @@ export function EditorView() {
       updatedAt: Date.now(),
       dirty: true,
     }
-    upsertFile(next)
-    openFile(activeFile.id) // синхронизировать editing.number с новым номером
+    await upsertFile(next)
+    openFile(activeFile.id)
   }
 
-  function doSave() {
+  async function doSave() {
     if (!activeFile) return
     const wasTemp = activeFile.fileName.startsWith(".tmp/")
     const fileName = wasTemp ? "localization.md" : activeFile.fileName
-    fileToFolder()
+    await fileToFolder()
     toast({
       title: wasTemp ? "Сохранено в базу знаний" : "Локализация сохранена",
       description: `${fm.number}/${fileName}`,

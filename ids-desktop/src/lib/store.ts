@@ -107,6 +107,7 @@ interface State {
   syncError: string | null
   syncing: boolean
   lastCommitMessage: string | null
+  recentLimit: number
 
   init: () => Promise<void>
   completeSetup: (folder: string, name: string, email: string, branch: string) => Promise<void>
@@ -138,6 +139,7 @@ export const useStore = create<State>()((set, get) => ({
   syncError: null,
   syncing: false,
   lastCommitMessage: null,
+  recentLimit: 5,
 
   init: async () => {
     try {
@@ -163,11 +165,13 @@ export const useStore = create<State>()((set, get) => ({
       }
       const entries = await invoke<FileEntry[]>("read_localizations", { base: folder })
       const files = parseFileEntries(entries)
+      const cfg = readConfig(repoFiles)
       set({
         base: folder,
         repoFiles,
         files,
         settings: { setupComplete: true, offline: false },
+        recentLimit: cfg.recentLimit,
         view: "workspace",
       })
     } catch (e) {

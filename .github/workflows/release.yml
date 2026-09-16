@@ -42,7 +42,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.tauri_exists.outputs.exists == 'true'
         with:
-          node-version: 20
+          node-version: 22
       - uses: dtolnay/rust-toolchain@stable
         if: steps.tauri_exists.outputs.exists == 'true'
 

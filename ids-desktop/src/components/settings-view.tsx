@@ -137,6 +137,7 @@ export function SettingsView() {
   const cfg = React.useMemo(() => readConfig(repoFiles), [repoFiles])
 
   const [profile, setProfile] = React.useState(cfg.profile)
+  const [recentLimit, setRecentLimit] = React.useState(cfg.recentLimit)
   const [tplContent, setTplContent] = React.useState(
     () => repoFiles[TEMPLATE_PATH] ?? ""
   )
@@ -144,11 +145,12 @@ export function SettingsView() {
   // синхронизировать локальный state при загрузке repoFiles
   React.useEffect(() => {
     setProfile(readConfig(repoFiles).profile)
+    setRecentLimit(readConfig(repoFiles).recentLimit)
     setTplContent(repoFiles[TEMPLATE_PATH] ?? "")
   }, [repoFiles])
 
   function handleSave() {
-    writeConfig({ profile })
+    writeConfig({ profile, recentLimit })
     writeTemplateFile(tplContent)
     toast({ title: "Настройки сохранены" })
   }
@@ -202,6 +204,18 @@ export function SettingsView() {
                 placeholder="iivanov@nota.tech"
               />
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="p-recent" className="text-xs">Локализаций в «Последние»</Label>
+            <Input
+              id="p-recent"
+              type="number"
+              min={1}
+              max={100}
+              className="h-8 w-24 text-sm"
+              value={recentLimit}
+              onChange={(e) => setRecentLimit(Math.max(1, parseInt(e.target.value, 10) || 5))}
+            />
           </div>
           <p className="text-[11px] text-muted-foreground">
             Хранится в <code className="font-mono">.tmp/config.yaml</code> (не синхронизируется).

@@ -34,10 +34,12 @@ export const CONFIG_PATH = `${TMP_DIR}/config.yaml`
 
 export interface UserConfig {
   profile: { name: string; email: string }
+  recentLimit: number
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
   profile: { name: "", email: "" },
+  recentLimit: 5,
 }
 
 function cfgQuote(s: string): string {
@@ -64,21 +66,27 @@ export function serializeConfig(c: UserConfig): string {
   L.push("profile:")
   L.push(`  name: ${cfgVal(c.profile.name)}`)
   L.push(`  email: ${cfgVal(c.profile.email)}`)
+  L.push(`recentLimit: ${c.recentLimit}`)
   return L.join("\n") + "\n"
 }
 
 export function readConfig(repoFiles: Record<string, string> | undefined): UserConfig {
   const cfg: UserConfig = {
     profile: { ...DEFAULT_USER_CONFIG.profile },
+    recentLimit: DEFAULT_USER_CONFIG.recentLimit,
   }
   const content = repoFiles?.[CONFIG_PATH]
   if (!content) return cfg
   for (const line of content.replace(/\r\n/g, "\n").split("\n")) {
-    const m = /^\s{2}([a-zA-Z_]+):\s?(.*)$/.exec(line)
+    const m = /^(\s{0,2})([a-zA-Z_]+):\s?(.*)$/.exec(line)
     if (!m) continue
-    const key = m[1]
-    const val = m[2]
-    ;(cfg.profile as Record<string, string>)[key] = cfgUnquote(val)
+    const key = m[2]
+    const val = m[3]
+    if (key === "recentLimit") {
+      cfg.recentLimit = parseInt(cfgUnquote(val), 10) || 5
+    } else {
+      ;(cfg.profile as Record<string, string>)[key] = cfgUnquote(val)
+    }
   }
   return cfg
 }
