@@ -19,6 +19,7 @@ import {
   TEMPLATE_PATH,
   type UserConfig,
 } from "./repo"
+import { EMPTY_FRONTMATTER, TEMPLATE_BODY } from "./template"
 
 function pathFor(f: Localization): string {
   if (f.fileName.startsWith(".tmp/")) return f.fileName
@@ -44,7 +45,7 @@ interface State {
   lastCommitMessage: string | null
 
   init: () => Promise<void>
-  completeSetup: (folder: string) => Promise<void>
+  completeSetup: (folder: string, name: string, email: string, branch: string) => Promise<void>
   setView: (v: View) => void
   openFolder: (number: string) => void
   openFile: (fileId: string) => void
@@ -92,7 +93,6 @@ export const useStore = create<State>()((set, get) => ({
         }
       }
       if (!repoFiles[TEMPLATE_PATH]) {
-        const { EMPTY_FRONTMATTER, TEMPLATE_BODY } = await import("./template")
         const content = serializeDocument(EMPTY_FRONTMATTER, TEMPLATE_BODY)
         await invoke("write_file", { base: folder, path: TEMPLATE_PATH, content })
         repoFiles[TEMPLATE_PATH] = content
@@ -110,9 +110,15 @@ export const useStore = create<State>()((set, get) => ({
     }
   },
 
-  completeSetup: async (folder) => {
+  completeSetup: async (folder, name, email, branch) => {
     await invoke("set_folder", { folder })
     await invoke("init_project", { folder })
+    // записать автора в .tmp/config.yaml
+    const config = { profile: { name, email } }
+    await invoke("write_file", { base: folder, path: CONFIG_PATH, content: serializeConfig(config) })
+    // checkout выбранной ветки + pull
+    await invoke("git_checkout_pull", { folder, branch })
+    // перезагрузить данные
     await get().init()
   },
 
@@ -134,8 +140,7 @@ export const useStore = create<State>()((set, get) => ({
     const tpl = readTemplate(repoFiles)
     const cfg = readConfig(repoFiles)
     const author = formatAuthor(cfg.profile.name, cfg.profile.email) || ""
-    const spaceCode = cfg.profile.spaceCode || "SPAS"
-    const fm = { ...tpl.frontmatter, number: `${spaceCode}-`, author }
+    const fm = { ...tpl.frontmatter, number: "", author }
     const id = crypto.randomUUID()
     const fileName = tempFileName()
     const file: Localization = {

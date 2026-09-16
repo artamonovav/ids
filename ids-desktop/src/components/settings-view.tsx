@@ -8,15 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import {
   Card,
   CardContent,
@@ -24,23 +17,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { ArrowLeft, Plus, X, Save } from "lucide-react"
 import {
-  ArrowLeft,
-  Plus,
-  X,
-  Save,
-  Plug,
-  CheckCircle2,
-  Loader2,
-} from "lucide-react"
-import {
-  CONFIG_PATH,
   DICT_FILES,
   TEMPLATE_PATH,
   readDictionaries,
   readConfig,
 } from "@/lib/repo"
-import type { AuthMethod, Dictionaries, DictName, RepoConfig } from "@/lib/types"
+import type { Dictionaries, DictName } from "@/lib/types"
 
 const DICT_META: { name: DictName; label: string }[] = [
   { name: "type", label: "Тип" },
@@ -95,10 +79,7 @@ function DictionaryEditor({
   const [input, setInput] = React.useState("")
   function add() {
     const v = input.trim()
-    if (!v || values.includes(v)) {
-      setInput("")
-      return
-    }
+    if (!v || values.includes(v)) { setInput(""); return }
     onChange([...values, v])
     setInput("")
   }
@@ -126,12 +107,7 @@ function DictionaryEditor({
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault()
-              add()
-            }
-          }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add() } }}
           placeholder={`Добавить значение в «${label}»`}
           className="h-8 text-sm"
         />
@@ -144,8 +120,9 @@ function DictionaryEditor({
 }
 
 export function SettingsView() {
-  const settings = useStore((s) => s.settings)
+  const base = useStore((s) => s.base)
   const repoFiles = useStore((s) => s.repoFiles)
+  const settings = useStore((s) => s.settings)
   const writeConfig = useStore((s) => s.writeConfig)
   const writeDictionary = useStore((s) => s.writeDictionary)
   const writeTemplateFile = useStore((s) => s.writeTemplateFile)
@@ -157,35 +134,21 @@ export function SettingsView() {
     () => readDictionaries(repoFiles),
     [repoFiles]
   )
-  const initialConfig = React.useMemo(() => readConfig(repoFiles), [repoFiles])
+  const cfg = React.useMemo(() => readConfig(repoFiles), [repoFiles])
 
-  const [profile, setProfile] = React.useState(initialConfig.profile)
-  const [repo, setRepo] = React.useState<RepoConfig>(initialConfig.repo)
+  const [profile, setProfile] = React.useState(cfg.profile)
   const [tplContent, setTplContent] = React.useState(
     () => repoFiles[TEMPLATE_PATH] ?? ""
   )
-  const [connecting, setConnecting] = React.useState(false)
-  const [connected, setConnected] = React.useState(repo.connected)
 
-  async function checkConnection() {
-    if (!repo.url.trim()) {
-      toast({ title: "Укажите адрес репозитория", variant: "destructive" })
-      return
-    }
-    setConnecting(true)
-    await new Promise((r) => setTimeout(r, 1100))
-    const branches = repo.branches.length > 0 ? repo.branches : ["main", "develop"]
-    setRepo((r) => ({ ...r, branches, branch: r.branch || branches[0] }))
-    setConnected(true)
-    setConnecting(false)
-    toast({
-      title: "Подключение установлено",
-      description: `Доступно веток: ${branches.length}`,
-    })
-  }
+  // синхронизировать локальный state при загрузке repoFiles
+  React.useEffect(() => {
+    setProfile(readConfig(repoFiles).profile)
+    setTplContent(repoFiles[TEMPLATE_PATH] ?? "")
+  }, [repoFiles])
 
   function handleSave() {
-    writeConfig({ profile, repo: { ...repo, connected } })
+    writeConfig({ profile })
     writeTemplateFile(tplContent)
     toast({ title: "Настройки сохранены" })
   }
@@ -203,23 +166,19 @@ export function SettingsView() {
           </Button>
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Настройки</h1>
-            <p className="text-xs text-muted-foreground">
-              Профиль, репозиторий, справочники и шаблон.
-            </p>
+            <p className="text-xs text-muted-foreground">Профиль, папка, справочники, шаблон.</p>
           </div>
         </div>
         <Button size="sm" onClick={handleSave}>
-          <Save className="size-4" />
-          Сохранить
+          <Save className="size-4" /> Сохранить
         </Button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Профиль + код пространства — локально, .tmp/config.yaml */}
+        {/* Профиль */}
         <Section
           title="Профиль пользователя"
           desc="Используется как автор локализаций. Автор сериализуется как ФИО <email>."
-          path={CONFIG_PATH}
         >
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
@@ -244,151 +203,27 @@ export function SettingsView() {
               />
             </div>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="p-space" className="text-xs">Код пространства (трекер)</Label>
-            <Input
-              id="p-space"
-              className="h-8 text-sm"
-              value={profile.spaceCode}
-              onChange={(e) => setProfile({ ...profile, spaceCode: e.target.value })}
-              placeholder="SPAS"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Подставляется по умолчанию в номер нового дефекта (поле свободное).
-            </p>
-          </div>
           <p className="text-[11px] text-muted-foreground">
-            Профиль и git-аутентификация хранятся локально в{" "}
-            <code className="font-mono">.tmp/config.yaml</code> (в .gitignore, не
-            синхронизируются).
+            Хранится в <code className="font-mono">.tmp/config.yaml</code> (не синхронизируется).
           </p>
         </Section>
 
-        {/* Репозиторий + аутентификация — локально, .tmp/config.yaml */}
-        <Section title="Репозиторий" desc="Хранение базы знаний в Git." path={CONFIG_PATH}>
-          <div className="space-y-2">
-            <Label htmlFor="r-url" className="text-xs">Адрес репозитория</Label>
-            <Input
-              id="r-url"
-              value={repo.url}
-              onChange={(e) => setRepo({ ...repo, url: e.target.value })}
-              placeholder="git@kb.example.ru:spas/knowledge-base.git"
-              className="font-mono text-xs"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Способ аутентификации</Label>
-            <Select
-              value={repo.authMethod}
-              onValueChange={(v) => setRepo({ ...repo, authMethod: v as AuthMethod })}
-            >
-              <SelectTrigger className="h-8 w-full text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ssh">SSH (ключ)</SelectItem>
-                <SelectItem value="https">HTTPS (логин + токен)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {repo.authMethod === "https" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="r-user" className="text-xs">Логин</Label>
-                <Input
-                  id="r-user"
-                  className="h-8 text-sm"
-                  value={repo.httpsUser}
-                  onChange={(e) => setRepo({ ...repo, httpsUser: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="r-token" className="text-xs">Токен / пароль</Label>
-                <Input
-                  id="r-token"
-                  type="password"
-                  className="h-8 text-sm"
-                  value={repo.httpsToken}
-                  onChange={(e) => setRepo({ ...repo, httpsToken: e.target.value })}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="r-key" className="text-xs">Путь к SSH-ключу</Label>
-                <Input
-                  id="r-key"
-                  value={repo.sshKeyPath}
-                  onChange={(e) => setRepo({ ...repo, sshKeyPath: e.target.value })}
-                  className="font-mono text-xs"
-                  placeholder="~/.ssh/id_ed25519"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="r-pass" className="text-xs">Passphrase (опц.)</Label>
-                <Input
-                  id="r-pass"
-                  type="password"
-                  className="h-8 text-sm"
-                  value={repo.sshPassphrase}
-                  onChange={(e) => setRepo({ ...repo, sshPassphrase: e.target.value })}
-                />
-              </div>
-            </div>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="r-branch" className="text-xs">Ветка</Label>
-            <Select
-              value={repo.branch}
-              onValueChange={(v) => setRepo({ ...repo, branch: v })}
-              disabled={!connected}
-            >
-              <SelectTrigger className="h-8 w-full text-sm">
-                <SelectValue placeholder={connected ? "Выберите ветку" : "Сначала проверьте подключение"} />
-              </SelectTrigger>
-              <SelectContent>
-                {repo.branches.map((b) => (
-                  <SelectItem key={b} value={b}>{b}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="r-path" className="text-xs">Локальная папка</Label>
-            <Input
-              id="r-path"
-              value={repo.localPath}
-              onChange={(e) => setRepo({ ...repo, localPath: e.target.value })}
-              className="font-mono text-xs"
-              placeholder="~/ids"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" className="h-8" onClick={checkConnection} disabled={connecting}>
-              {connecting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Plug className="size-4" />
-              )}
-              Проверить подключение
-            </Button>
-            {connected && (
-              <Badge variant="outline" className="gap-1 text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="size-3.5" />
-                Подключено
-              </Badge>
-            )}
-          </div>
+        {/* Папка проекта */}
+        <Section title="Папка проекта" desc="Где хранятся локализации, справочники, шаблон.">
+          <Input
+            value={base}
+            readOnly
+            className="font-mono text-xs"
+            placeholder="не указана"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Чтобы сменить папку — пересоздайте проект (удалите <code className="font-mono">paths.json</code> в данных приложения).
+          </p>
         </Section>
 
-        {/* Справочники — база знаний, .dictionary/*.yaml */}
+        {/* Справочники */}
         {DICT_META.map(({ name, label }) => (
-          <Section
-            key={name}
-            title={`Справочник: ${label}`}
-            path={DICT_FILES[name]}
-          >
+          <Section key={name} title={`Справочник: ${label}`} path={DICT_FILES[name]}>
             <DictionaryEditor
               name={name}
               label={label}
@@ -398,10 +233,10 @@ export function SettingsView() {
           </Section>
         ))}
 
-        {/* Шаблон — база знаний, _template/localization.md */}
+        {/* Шаблон */}
         <Section
           title="Шаблон локализации"
-          desc="Эталон нового документа. Читается из репозитория при создании."
+          desc="Эталон нового документа. Читается при создании."
           path={TEMPLATE_PATH}
         >
           <Textarea
@@ -410,20 +245,14 @@ export function SettingsView() {
             rows={14}
             className="font-mono text-xs"
           />
-          <p className="text-[11px] text-muted-foreground">
-            Изменения применяются после «Сохранить». Frontmatter задаёт значения по
-            умолчанию, тело — структуру новых документов.
-          </p>
         </Section>
 
-        {/* Режим — UI-состояние */}
-        <Section title="Режим работы" desc="Автономный режим откладывает отправку до восстановления связи.">
+        {/* Режим */}
+        <Section title="Режим работы" desc="Автономный режим откладывает отправку.">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Автономный режим</p>
-              <p className="text-[11px] text-muted-foreground">
-                Сохранение локально с отложенной отправкой.
-              </p>
+              <p className="text-[11px] text-muted-foreground">Сохранение локально с отложенной отправкой.</p>
             </div>
             <Switch checked={settings.offline} onCheckedChange={(v) => setOffline(v)} />
           </div>
@@ -433,8 +262,7 @@ export function SettingsView() {
       <Separator />
       <div className="flex justify-end">
         <Button size="sm" onClick={handleSave}>
-          <Save className="size-4" />
-          Сохранить
+          <Save className="size-4" /> Сохранить
         </Button>
       </div>
     </div>

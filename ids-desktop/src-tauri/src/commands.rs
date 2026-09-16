@@ -226,3 +226,37 @@ pub fn git_sync(base: String, commit_message: String, author_name: String, autho
     run(&["-C", &base, "push"])?;
     Ok(())
 }
+
+/// Список локальных веток в папке.
+#[tauri::command]
+pub fn git_branches(folder: String) -> Result<Vec<String>, String> {
+    let out = Command::new("git")
+        .args(["-C", &folder, "branch", "--list", "--format=%(refname:short)"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).to_string())
+    }
+}
+
+/// git checkout <branch> && git pull --ff-only
+#[tauri::command]
+pub fn git_checkout_pull(folder: String, branch: String) -> Result<(), String> {
+    let run = |args: &[&str]| -> Result<(), String> {
+        let out = Command::new("git").args(args).output().map_err(|e| e.to_string())?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).to_string())
+        }
+    };
+    run(&["-C", &folder, "checkout", &branch])?;
+    run(&["-C", &folder, "pull", "--ff-only"])?;
+    Ok(())
+}

@@ -33,24 +33,11 @@ export function tempFileName(): string {
 export const CONFIG_PATH = `${TMP_DIR}/config.yaml`
 
 export interface UserConfig {
-  profile: { name: string; email: string; spaceCode: string }
-  repo: RepoConfig
+  profile: { name: string; email: string }
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
-  profile: { name: "Anatoly Artamonov", email: "aartamonov@nota.tech", spaceCode: "SPAS" },
-  repo: {
-    url: "git@kb.example.ru:spas/knowledge-base.git",
-    authMethod: "ssh",
-    httpsUser: "",
-    httpsToken: "",
-    sshKeyPath: "~/.ssh/id_ed25519",
-    sshPassphrase: "",
-    branch: "main",
-    branches: ["main", "develop"],
-    localPath: "~/ids",
-    connected: true,
-  },
+  profile: { name: "", email: "" },
 }
 
 function cfgQuote(s: string): string {
@@ -77,59 +64,21 @@ export function serializeConfig(c: UserConfig): string {
   L.push("profile:")
   L.push(`  name: ${cfgVal(c.profile.name)}`)
   L.push(`  email: ${cfgVal(c.profile.email)}`)
-  L.push(`  spaceCode: ${cfgVal(c.profile.spaceCode)}`)
-  L.push("repo:")
-  L.push(`  url: ${cfgVal(c.repo.url)}`)
-  L.push(`  authMethod: ${c.repo.authMethod}`)
-  L.push(`  httpsUser: ${cfgVal(c.repo.httpsUser)}`)
-  L.push(`  httpsToken: ${cfgVal(c.repo.httpsToken)}`)
-  L.push(`  sshKeyPath: ${cfgVal(c.repo.sshKeyPath)}`)
-  L.push(`  sshPassphrase: ${cfgVal(c.repo.sshPassphrase)}`)
-  L.push(`  branch: ${cfgVal(c.repo.branch)}`)
-  L.push(`  branches: [${c.repo.branches.map(cfgVal).join(", ")}]`)
-  L.push(`  localPath: ${cfgVal(c.repo.localPath)}`)
-  L.push(`  connected: ${c.repo.connected ? "true" : "false"}`)
   return L.join("\n") + "\n"
 }
 
 export function readConfig(repoFiles: Record<string, string> | undefined): UserConfig {
   const cfg: UserConfig = {
     profile: { ...DEFAULT_USER_CONFIG.profile },
-    repo: { ...DEFAULT_USER_CONFIG.repo, branches: [...DEFAULT_USER_CONFIG.repo.branches] },
   }
   const content = repoFiles?.[CONFIG_PATH]
   if (!content) return cfg
-  let section: "profile" | "repo" | null = null
   for (const line of content.replace(/\r\n/g, "\n").split("\n")) {
-    if (/^profile:\s*$/.test(line)) {
-      section = "profile"
-      continue
-    }
-    if (/^repo:\s*$/.test(line)) {
-      section = "repo"
-      continue
-    }
     const m = /^\s{2}([a-zA-Z_]+):\s?(.*)$/.exec(line)
-    if (!m || !section) continue
+    if (!m) continue
     const key = m[1]
     const val = m[2]
-    if (section === "profile") {
-      ;(cfg.profile as Record<string, string>)[key] = cfgUnquote(val)
-    } else {
-      if (key === "branches") {
-        const t = val.trim()
-        const inner = t.startsWith("[") && t.endsWith("]") ? t.slice(1, -1) : t
-        cfg.repo.branches =
-          inner.trim() === "" ? [] : inner.split(",").map((s) => cfgUnquote(s))
-      } else if (key === "connected") {
-        ;(cfg.repo as Record<string, unknown>)[key] = val.trim() === "true"
-      } else {
-        ;(cfg.repo as Record<string, unknown>)[key] = cfgUnquote(val)
-      }
-    }
-  }
-  if (cfg.repo.authMethod !== "https" && cfg.repo.authMethod !== "ssh") {
-    cfg.repo.authMethod = "ssh"
+    ;(cfg.profile as Record<string, string>)[key] = cfgUnquote(val)
   }
   return cfg
 }
@@ -178,9 +127,9 @@ export function readDictionary(
   name: DictName
 ): string[] {
   const content = repoFiles?.[DICT_FILES[name]]
-  if (!content) return DEFAULT_DICTIONARIES[name]
+  if (!content) return []
   const parsed = parseDictYaml(content)
-  return parsed.length > 0 ? parsed : DEFAULT_DICTIONARIES[name]
+  return parsed
 }
 
 export function readDictionaries(
