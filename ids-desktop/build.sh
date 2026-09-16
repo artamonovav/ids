@@ -17,7 +17,19 @@ bun x tauri build
 
 # 4. Копируем артефакты в примонтированную папку (доступна на хосте)
 mkdir -p artifacts
-cp -r src-tauri/target/release/bundle/. artifacts/ 2>/dev/null || true
+BUNDLE="src-tauri/target/release/bundle"
+if [ -d "$BUNDLE" ]; then
+  cp -r "$BUNDLE/." artifacts/
+  echo "✓ Артефакты скопированы: $(pwd)/artifacts/"
+  ls -R artifacts/ 2>/dev/null | head -20
+else
+  echo "⚠ bundle не найден в $BUNDLE — ищу артефакты:" >&2
+  find src-tauri/target -name '*.deb' -o -name '*.AppImage' 2>/dev/null | head -10
+  echo "" >&2
+  echo "Если artifacts/ пусто — артефакты в Docker-томе. Заберите вручную:" >&2
+  echo "  docker volume ls | grep tauri_target" >&2
+  echo '  docker run --rm -v <имя-тома>:/data -v "$PWD:/out" busybox cp -r /data/release/bundle /out/' >&2
+fi
 
 echo ""
 echo "=== Готово ==="

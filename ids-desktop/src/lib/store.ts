@@ -1,10 +1,6 @@
-// Tauri-версия lib/store.ts — ПОЛНАЯ.
-// Те же данные в памяти, но чтение/запись через invoke (настоящая ФС + git CLI).
-// Компоненты (editor-view/workspace-view/...) не меняются — зовут те же действия;
-// мутации здесь пишут в файлы и гоняют git.
-//
-// base = путь к локальному репозиторию (Tauri app_data_dir, команда get_base).
-// Конфиг (профиль + git-аутентификация) лежит в base/.tmp/config.yaml (gitignored).
+// Tauri-версия lib/store.ts — folder-based, без git-настроек.
+// base = папка проекта (выбранная пользователем). Git — через host-бинарник.
+// Компоненты (editor-view/workspace-view/...) не меняются — зовут те же действия.
 
 "use client"
 
@@ -24,13 +20,11 @@ import {
   type UserConfig,
 } from "./repo"
 
-/** Путь к файлу локализации на диске (относительно base). */
 function pathFor(f: Localization): string {
   if (f.fileName.startsWith(".tmp/")) return f.fileName
   return f.number ? `${f.number}/${f.fileName}` : ""
 }
 
-/** Записать файл локализации на диск. */
 async function writeLoc(base: string, f: Localization) {
   const path = pathFor(f)
   if (!path) return
@@ -50,25 +44,22 @@ interface State {
   lastCommitMessage: string | null
 
   init: () => Promise<void>
+  completeSetup: (folder: string) => Promise<void>
   setView: (v: View) => void
   openFolder: (number: string) => void
   openFile: (fileId: string) => void
   closeEditor: () => void
-
   createDraft: () => Promise<string>
   upsertFile: (file: Localization) => Promise<void>
   patchFile: (id: string, patch: Partial<Localization>) => Promise<void>
   removeFile: (id: string) => Promise<void>
   removeFolderDrafts: (number: string) => Promise<void>
   clarify: () => Promise<string | null>
-
   writeDictionary: (name: DictName, values: string[]) => Promise<void>
   writeTemplateFile: (content: string) => Promise<void>
   writeConfig: (config: UserConfig) => Promise<void>
-
   sync: () => Promise<void>
   setOffline: (b: boolean) => void
-  completeSetup: (config: UserConfig) => Promise<void>
 }
 
 export const useStore = create<State>()((set, get) => ({
@@ -76,7 +67,7 @@ export const useStore = create<State>()((set, get) => ({
   repoFiles: {},
   settings: { setupComplete: false, offline: false },
   base: "",
-  view: "workspace",
+  view: "setup",
   editing: { number: null, fileId: null },
   syncStatus: "green",
   syncError: null,
@@ -85,20 +76,44 @@ export const useStore = create<State>()((set, get) => ({
 
   init: async () => {
     try {
-      const base = await invoke<string>("get_base")
-      set({ base })
-      const repoFiles = await invoke<Record<string, string>>("read_repo_files", { base })
-      const files = await invoke<Localization[]>("read_localizations", { base })
-      const cfg = readConfig(repoFiles)
+      const folder = await invoke<string>("get_folder")
+      if (!folder) {
+        set({ view: "setup" })
+        return
+      }
+      await invoke("init_project", { folder })
+      let repoFiles = await invoke<Record<string, string>>("read_repo_files", { base: folder })
+      // создать недостающие справочники + шаблон на диске (если папка была пуста)
+      for (const name of ["type", "client", "environment", "product", "scope"] as DictName[]) {
+        if (!repoFiles[DICT_FILES[name]]) {
+          const content = serializeDictYaml([])
+          await invoke("write_file", { base: folder, path: DICT_FILES[name], content })
+          repoFiles[DICT_FILES[name]] = content
+        }
+      }
+      if (!repoFiles[TEMPLATE_PATH]) {
+        const { EMPTY_FRONTMATTER, TEMPLATE_BODY } = await import("./template")
+        const content = serializeDocument(EMPTY_FRONTMATTER, TEMPLATE_BODY)
+        await invoke("write_file", { base: folder, path: TEMPLATE_PATH, content })
+        repoFiles[TEMPLATE_PATH] = content
+      }
+      const files = await invoke<Localization[]>("read_localizations", { base: folder })
       set({
+        base: folder,
         repoFiles,
         files,
-        settings: { setupComplete: !!cfg.repo.connected, offline: false },
-        view: cfg.repo.connected ? "workspace" : "setup",
+        settings: { setupComplete: true, offline: false },
+        view: "workspace",
       })
     } catch (e) {
       set({ syncStatus: "red", syncError: String(e), view: "setup" })
     }
+  },
+
+  completeSetup: async (folder) => {
+    await invoke("set_folder", { folder })
+    await invoke("init_project", { folder })
+    await get().init()
   },
 
   setView: (v) => set({ view: v }),
@@ -118,22 +133,14 @@ export const useStore = create<State>()((set, get) => ({
     const { base, repoFiles } = get()
     const tpl = readTemplate(repoFiles)
     const cfg = readConfig(repoFiles)
-    const author = formatAuthor(cfg.profile.name, cfg.profile.email) || tpl.frontmatter.author
+    const author = formatAuthor(cfg.profile.name, cfg.profile.email) || ""
     const spaceCode = cfg.profile.spaceCode || "SPAS"
     const fm = { ...tpl.frontmatter, number: `${spaceCode}-`, author }
     const id = crypto.randomUUID()
     const fileName = tempFileName()
     const file: Localization = {
-      id,
-      number: "",
-      fileName,
-      frontmatter: fm,
-      body: tpl.body,
-      attachments: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      dirty: true,
-      synced: false,
+      id, number: "", fileName, frontmatter: fm, body: tpl.body, attachments: [],
+      createdAt: Date.now(), updatedAt: Date.now(), dirty: true, synced: false,
     }
     set((s) => ({
       files: [...s.files, file],
@@ -169,9 +176,8 @@ export const useStore = create<State>()((set, get) => ({
     if (!f) return
     const oldPath = before ? pathFor(before) : ""
     const newPath = pathFor(f)
-    // если файл переименован (.tmp → номер) — удалить старый путь
     if (oldPath && newPath && oldPath !== newPath) {
-      try { await invoke("delete_file", { base, path: oldPath }) } catch { /* старого уже нет */ }
+      try { await invoke("delete_file", { base, path: oldPath }) } catch { /* old gone */ }
     }
     if (newPath) {
       await invoke("write_file", { base, path: newPath, content: serializeDocument(f.frontmatter, f.body) })
@@ -217,17 +223,9 @@ export const useStore = create<State>()((set, get) => ({
     const id = crypto.randomUUID()
     const tpl = readTemplate(repoFiles)
     const file: Localization = {
-      id,
-      number: parent.number,
-      fileName: `localization-${idx}.md`,
-      parentId: parent.id,
-      frontmatter: { ...parent.frontmatter },
-      body: tpl.body,
-      attachments: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      dirty: true,
-      synced: false,
+      id, number: parent.number, fileName: `localization-${idx}.md`, parentId: parent.id,
+      frontmatter: { ...parent.frontmatter }, body: tpl.body, attachments: [],
+      createdAt: Date.now(), updatedAt: Date.now(), dirty: true, synced: false,
     }
     set((s) => ({
       files: [...s.files, file],
@@ -241,10 +239,7 @@ export const useStore = create<State>()((set, get) => ({
   writeDictionary: async (name, values) => {
     const { base } = get()
     const content = serializeDictYaml(values)
-    set((s) => ({
-      repoFiles: { ...s.repoFiles, [DICT_FILES[name]]: content },
-      syncStatus: "yellow",
-    }))
+    set((s) => ({ repoFiles: { ...s.repoFiles, [DICT_FILES[name]]: content }, syncStatus: "yellow" }))
     await invoke("write_file", { base, path: DICT_FILES[name], content })
   },
 
@@ -277,10 +272,8 @@ export const useStore = create<State>()((set, get) => ({
       await invoke("git_sync", {
         base,
         commitMessage,
-        authorName: cfg.profile.name,
-        authorEmail: cfg.profile.email,
-        authMethod: cfg.repo.authMethod,
-        sshKey: cfg.repo.sshKeyPath,
+        authorName: cfg.profile.name || "IDS",
+        authorEmail: cfg.profile.email || "ids@local",
       })
       set((s) => ({
         syncing: false,
@@ -288,8 +281,7 @@ export const useStore = create<State>()((set, get) => ({
         syncError: null,
         files: s.files.map((f) =>
           f.dirty && f.number && !f.fileName.startsWith(".tmp/")
-            ? { ...f, dirty: false, synced: true }
-            : f
+            ? { ...f, dirty: false, synced: true } : f
         ),
         lastCommitMessage: commitMessage,
       }))
@@ -300,32 +292,8 @@ export const useStore = create<State>()((set, get) => ({
 
   setOffline: (b) =>
     set((s) => ({ settings: { ...s.settings, offline: b }, syncStatus: b ? "yellow" : s.syncStatus })),
-
-  completeSetup: async (config) => {
-    const { base } = get()
-    const content = serializeConfig(config)
-    // клонируем репозиторий в base (если ещё не клонирован)
-    try {
-      await invoke("git_clone", {
-        url: config.repo.url,
-        base,
-        authMethod: config.repo.authMethod,
-        sshKey: config.repo.sshKeyPath,
-      })
-    } catch (e) {
-      // возможно уже клонирован — не критично
-      console.warn("git_clone:", String(e))
-    }
-    await invoke("write_file", { base, path: CONFIG_PATH, content })
-    set((s) => ({
-      repoFiles: { ...s.repoFiles, [CONFIG_PATH]: content },
-      settings: { ...s.settings, setupComplete: true },
-      view: "workspace",
-    }))
-  },
 }))
 
-// --- селектор (как в веб-версии) ---
 export function selectFolders(files: Localization[]) {
   const map = new Map<string, Localization[]>()
   for (const f of files) {
@@ -337,19 +305,10 @@ export function selectFolders(files: Localization[]) {
   return [...map.entries()]
     .map(([number, list]) => {
       const sorted = list.sort((a, b) =>
-        a.fileName === "localization.md"
-          ? -1
-          : b.fileName === "localization.md"
-            ? 1
-            : a.fileName.localeCompare(b.fileName)
+        a.fileName === "localization.md" ? -1 : b.fileName === "localization.md" ? 1 : a.fileName.localeCompare(b.fileName)
       )
       const main = sorted.find((f) => f.fileName === "localization.md") ?? sorted[0]
-      return {
-        number,
-        files: sorted,
-        main,
-        updatedAt: Math.max(...sorted.map((f) => f.updatedAt)),
-      }
+      return { number, files: sorted, main, updatedAt: Math.max(...sorted.map((f) => f.updatedAt)) }
     })
     .sort((a, b) => {
       const na = parseInt(a.number.replace(/\D/g, ""), 10) || 0

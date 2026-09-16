@@ -1,5 +1,7 @@
-// Tauri-команды IDS: файловый слой (std::fs) + git (системный CLI) + путь к репозиторию.
-// Фронтенд парсит frontmatter/конфиг сам — Rust только читает/пишет файлы и гоняет git.
+// Tauri-команды IDS: файловый слой (std::fs) + host git (CLI).
+// База = папка проекта (выбранная пользователем), НЕ app_data_dir.
+// Путь к папке запоминается в app_data_dir/paths.json.
+// Git-аутентификация — через системный git (credential helper / SSH agent хоста).
 
 use std::collections::HashMap;
 use std::fs;
@@ -18,40 +20,85 @@ fn join(base: &str, rel: &str) -> PathBuf {
     Path::new(base).join(rel)
 }
 
-/// Локальный путь к репозиторию (Tauri app_data_dir). Туда клонируется репо IDS.
-#[tauri::command]
-pub fn get_base(app: tauri::AppHandle) -> Result<String, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+/// Путь к файлу-указателю (paths.json) в app_data_dir.
+fn paths_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.to_string_lossy().to_string())
+    Ok(dir.join("paths.json"))
 }
 
-fn git_env(auth_method: &str, ssh_key: &str) -> Vec<(&'static str, String)> {
-    if auth_method == "ssh" && !ssh_key.is_empty() {
-        vec![(
-            "GIT_SSH_COMMAND",
-            format!("ssh -i {} -o StrictHostKeyChecking=accept-new", ssh_key),
-        )]
-    } else {
-        vec![]
+/// Запомненный путь к папке проекта (пусто, если не указан).
+#[tauri::command]
+pub fn get_folder(app: tauri::AppHandle) -> Result<String, String> {
+    let p = paths_file(&app)?;
+    if !p.exists() {
+        return Ok(String::new());
     }
+    let content = fs::read_to_string(p).map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+    Ok(v.get("folder").and_then(|s| s.as_str()).unwrap_or("").to_string())
 }
 
-fn run_git(env: &[(&str, String)], args: &[&str]) -> Result<String, String> {
-    let mut cmd = Command::new("git");
-    cmd.args(args);
-    for (k, v) in env {
-        cmd.env(k, v);
+/// Сохранить путь к папке проекта.
+#[tauri::command]
+pub fn set_folder(app: tauri::AppHandle, folder: String) -> Result<(), String> {
+    let p = paths_file(&app)?;
+    let json = serde_json::json!({ "folder": folder }).to_string();
+    fs::write(p, json).map_err(|e| e.to_string())
+}
+
+/// Является ли папка git-репозиторием.
+#[tauri::command]
+pub fn is_git_repo(folder: String) -> bool {
+    Path::new(&folder).join(".git").exists()
+}
+
+/// Первый запуск / смена папки:
+///  - если git-репо → git pull (host git);
+///  - создать служебные папки (.dictionary, _template, .tmp) + .gitignore + дефолтные справочники.
+#[tauri::command]
+pub fn init_project(folder: String) -> Result<(), String> {
+    let root = Path::new(&folder);
+    fs::create_dir_all(root).map_err(|e| e.to_string())?;
+
+    // git pull, если это репо (ошибки — не критично: может не быть remote)
+    if root.join(".git").exists() {
+        let _ = Command::new("git")
+            .args(["-C", &folder, "pull", "--ff-only"])
+            .status();
     }
-    let out = cmd.output().map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).to_string())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).to_string())
+
+    // служебные папки
+    for d in [".dictionary", "_template", ".tmp"] {
+        fs::create_dir_all(root.join(d)).map_err(|e| e.to_string())?;
     }
+
+    // .gitignore (исключает .tmp — черновики и локальный конфиг не синхронизируются)
+    let gi = root.join(".gitignore");
+    if !gi.exists() {
+        fs::write(gi, ".tmp/\n").map_err(|e| e.to_string())?;
+    }
+
+    // дефолтные справочники (если файлов нет)
+    let defaults: [(&str, &[&str]); 5] = [
+        ("type", &["Дефект", "Консультация", "Задача"]),
+        ("client", &[]),
+        ("environment", &["Препрод", "Прод"]),
+        ("product", &[]),
+        ("scope", &["Единичное", "Группа", "Все"]),
+    ];
+    for (name, values) in defaults {
+        let p = root.join(".dictionary").join(format!("{}.yaml", name));
+        if !p.exists() {
+            let mut content = String::from("values:\n");
+            for v in values {
+                content.push_str(&format!("  - {}\n", v));
+            }
+            fs::write(p, content).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(())
 }
 
 // --- Файловый слой ---
@@ -147,50 +194,35 @@ pub fn rename_file(base: String, from: String, to: String) -> Result<(), String>
     fs::rename(src, dst).map_err(|e| e.to_string())
 }
 
-// --- Git (системный CLI) ---
+// --- Git (host binary; credentials — через системный git) ---
 
 #[tauri::command]
-pub fn git_clone(url: String, base: String, auth_method: String, ssh_key: String) -> Result<(), String> {
-    let env = git_env(&auth_method, &ssh_key);
-    run_git(&env, &["clone", &url, &base]).map(|_| ())
+pub fn git_pull(base: String) -> Result<(), String> {
+    let out = Command::new("git")
+        .args(["-C", &base, "pull", "--ff-only"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).to_string())
+    }
 }
 
+/// git add -A && git commit -m <msg> --author <a> && git push
 #[tauri::command]
-pub fn git_pull(base: String, auth_method: String, ssh_key: String) -> Result<(), String> {
-    let env = git_env(&auth_method, &ssh_key);
-    run_git(&env, &["-C", &base, "pull", "--ff-only"]).map(|_| ())
-}
-
-#[tauri::command]
-pub fn git_sync(
-    base: String,
-    commit_message: String,
-    author_name: String,
-    author_email: String,
-    auth_method: String,
-    ssh_key: String,
-) -> Result<(), String> {
-    let env = git_env(&auth_method, &ssh_key);
-    run_git(&env, &["-C", &base, "add", "-A"])?;
+pub fn git_sync(base: String, commit_message: String, author_name: String, author_email: String) -> Result<(), String> {
     let author = format!("{} <{}>", author_name, author_email);
-    let _ = run_git(&env, &["-C", &base, "commit", "-m", &commit_message, "--author", &author]);
-    run_git(&env, &["-C", &base, "push"])?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn git_branches(url: String, auth_method: String, ssh_key: String) -> Result<Vec<String>, String> {
-    let env = git_env(&auth_method, &ssh_key);
-    let out = run_git(&env, &["ls-remote", "--heads", &url])?;
-    let mut branches = Vec::new();
-    for line in out.lines() {
-        if let Some((_sha, refname)) = line.split_once('\t') {
-            let name = refname.strip_prefix("refs/heads/").unwrap_or(refname);
-            branches.push(name.to_string());
+    let run = |args: &[&str]| -> Result<(), String> {
+        let out = Command::new("git").args(args).output().map_err(|e| e.to_string())?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).to_string())
         }
-    }
-    if branches.is_empty() {
-        branches.push("main".to_string());
-    }
-    Ok(branches)
+    };
+    run(&["-C", &base, "add", "-A"])?;
+    let _ = run(&["-C", &base, "commit", "-m", &commit_message, "--author", &author]); // "nothing to commit" — не ошибка
+    run(&["-C", &base, "push"])?;
+    Ok(())
 }
