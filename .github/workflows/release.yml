@@ -88,13 +88,19 @@ jobs:
         working-directory: ids-desktop
         run: |
           set -e
-          EXE="src-tauri/target/release/IDS.exe"
-          if [ ! -f "$EXE" ]; then
-            echo "::error::Portable exe не найден: $EXE"
-            echo "productName в tauri.conf.json = IDS → ожидается src-tauri/target/release/IDS.exe"
+          # Сырой exe называется по имени Cargo-пакета (ids-desktop.exe),
+          # НЕ по productName (IDS). productName используется только для
+          # bundle-артефактов (msi/nsis), а raw binary берёт имя из
+          # Cargo.toml [package] name. Авто-детект через glob — устойчив к
+          # переименованию пакета.
+          EXE=$(ls src-tauri/target/release/*.exe 2>/dev/null | head -1)
+          if [ -z "$EXE" ] || [ ! -f "$EXE" ]; then
+            echo "::error::Portable exe не найден в src-tauri/target/release/"
+            echo "Ожидался <cargo-package-name>.exe (Cargo.toml [package] name = ids-desktop)"
             ls -la src-tauri/target/release/ 2>/dev/null | grep -i '\.exe$' || true
             exit 1
           fi
+          echo "Found portable exe: $EXE"
           STAGING="portable-staging"
           rm -rf "$STAGING"
           mkdir -p "$STAGING"
