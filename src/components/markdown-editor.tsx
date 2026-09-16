@@ -179,9 +179,10 @@ export function MarkdownEditor({
         const dataUrl = typeof reader.result === 'string' ? reader.result : ''
         const d = new Date()
         const pad = (n: number) => n.toString().padStart(2, '0')
+        const rand = Math.random().toString(36).slice(2, 6)
         const name = `image-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
           d.getDate(),
-        )}-${pad(d.getHours())}-${pad(d.getMinutes())}.png`
+        )}-${pad(d.getHours())}-${pad(d.getMinutes())}-${rand}.png`
         const path = `attachments/${name}`
         onAddAttachment?.({ path, name, dataUrl })
         const insert = `![${name}](${path})`
@@ -207,7 +208,8 @@ export function MarkdownEditor({
       const reader = new FileReader()
       reader.onload = () => {
         const dataUrl = typeof reader.result === 'string' ? reader.result : ''
-        const name = file.name
+        const rand = Math.random().toString(36).slice(2, 6)
+        const name = `${rand}-${file.name}`
         const path = `attachments/${name}`
         onAddAttachment?.({ path, name, dataUrl })
         const insert = `[${name}](${path})`

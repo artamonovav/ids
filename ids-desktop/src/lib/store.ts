@@ -21,6 +21,17 @@ import {
 } from "./repo"
 import { EMPTY_FRONTMATTER, TEMPLATE_BODY } from "./template"
 
+// UUID polyfill — crypto.randomUUID() может отсутствовать в старом WebKitGTK (Ubuntu 22.04)
+function uuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+  })
+}
+
 function pathFor(f: Localization): string {
   if (f.fileName.startsWith(".tmp/")) return f.fileName
   return f.number ? `${f.number}/${f.fileName}` : ""
@@ -30,6 +41,16 @@ async function writeLoc(base: string, f: Localization) {
   const path = pathFor(f)
   if (!path) return
   await invoke("write_file", { base, path, content: serializeDocument(f.frontmatter, f.body) })
+  // Записать вложения на диск (только для KB-файлов, не .tmp-черновиков)
+  if (f.number && f.attachments.length > 0) {
+    for (const att of f.attachments) {
+      if (att.dataUrl) {
+        try {
+          await invoke("write_attachment", { base, path: `${f.number}/${att.path}`, dataUrl: att.dataUrl })
+        } catch { /* вложение уже есть или ошибка — не критично */ }
+      }
+    }
+  }
 }
 
 interface State {
@@ -141,7 +162,7 @@ export const useStore = create<State>()((set, get) => ({
     const cfg = readConfig(repoFiles)
     const author = formatAuthor(cfg.profile.name, cfg.profile.email) || ""
     const fm = { ...tpl.frontmatter, number: "", author }
-    const id = crypto.randomUUID()
+    const id = uuid()
     const fileName = tempFileName()
     const file: Localization = {
       id, number: "", fileName, frontmatter: fm, body: tpl.body, attachments: [],
@@ -225,7 +246,7 @@ export const useStore = create<State>()((set, get) => ({
       if (m) max = Math.max(max, parseInt(m[1], 10))
     }
     const idx = max + 1
-    const id = crypto.randomUUID()
+    const id = uuid()
     const tpl = readTemplate(repoFiles)
     const file: Localization = {
       id, number: parent.number, fileName: `localization-${idx}.md`, parentId: parent.id,

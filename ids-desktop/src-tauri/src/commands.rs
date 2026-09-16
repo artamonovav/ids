@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::Manager;
 use serde::Serialize;
+use base64::{Engine as _, prelude::BASE64_STANDARD};
 
 #[derive(Serialize, Clone)]
 pub struct FileEntry {
@@ -194,6 +195,19 @@ pub fn rename_file(base: String, from: String, to: String) -> Result<(), String>
     fs::rename(src, dst).map_err(|e| e.to_string())
 }
 
+/// Записать вложение (изображение/файл) на диск — base64 → бинарный файл.
+#[tauri::command]
+pub fn write_attachment(base: String, path: String, data_url: String) -> Result<(), String> {
+    let p = join(&base, &path);
+    if let Some(parent) = p.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    // strip "data:...;base64," prefix
+    let b64 = data_url.split(',').nth(1).unwrap_or(&data_url);
+    let bytes = BASE64_STANDARD.decode(b64).map_err(|e| e.to_string())?;
+    fs::write(p, bytes).map_err(|e| e.to_string())
+}
+
 // --- Git (host binary; credentials — через системный git) ---
 
 #[tauri::command]
@@ -209,7 +223,7 @@ pub fn git_pull(base: String) -> Result<(), String> {
     }
 }
 
-/// git add -A && git commit -m <msg> --author <a> && git push
+/// git pull --rebase && git add -A && git commit -m <msg> --author <a> && git push
 #[tauri::command]
 pub fn git_sync(base: String, commit_message: String, author_name: String, author_email: String) -> Result<(), String> {
     let author = format!("{} <{}>", author_name, author_email);
@@ -221,6 +235,8 @@ pub fn git_sync(base: String, commit_message: String, author_name: String, autho
             Err(String::from_utf8_lossy(&out.stderr).to_string())
         }
     };
+    // Сначала тянем изменения с сервера (rebase — локальные поверх удалённых)
+    let _ = run(&["-C", &base, "pull", "--rebase"]); // нет сети/remote — не критично, продолжим
     run(&["-C", &base, "add", "-A"])?;
     let _ = run(&["-C", &base, "commit", "-m", &commit_message, "--author", &author]); // "nothing to commit" — не ошибка
     run(&["-C", &base, "push"])?;
