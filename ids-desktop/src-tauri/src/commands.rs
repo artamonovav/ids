@@ -19,6 +19,42 @@ pub struct FileEntry {
     pub modified: u64,
 }
 
+#[derive(Serialize, Clone)]
+pub struct AttachmentEntry {
+    pub path: String,
+    pub name: String,
+    pub data_url: String,
+}
+
+/// MIME-тип по расширению (для data URL вложений).
+fn guess_mime(name: &str) -> &'static str {
+    let lower = name.to_lowercase();
+    if lower.ends_with(".png") { "image/png" }
+    else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") { "image/jpeg" }
+    else if lower.ends_with(".gif") { "image/gif" }
+    else if lower.ends_with(".svg") { "image/svg+xml" }
+    else if lower.ends_with(".webp") { "image/webp" }
+    else if lower.ends_with(".bmp") { "image/bmp" }
+    else if lower.ends_with(".pdf") { "application/pdf" }
+    else { "application/octet-stream" }
+}
+
+/// Создать git-команду с CREATE_NO_WINDOW на Windows.
+/// Без этого флага GUI-приложение (Tauri) при spawn-е git.exe создаёт
+/// видимое консольное окно, мигающее при каждом pull/sync/branch/checkout.
+/// На Linux/macOS — no-op (там нет консольных окон при spawn-е subprocess-а).
+fn git_command(args: &[&str]) -> Command {
+    let mut cmd = Command::new("git");
+    cmd.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW = 0x08000000 — не показывать консоль subprocess-а.
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 fn join(base: &str, rel: &str) -> PathBuf {
     Path::new(base).join(rel)
 }
@@ -76,9 +112,7 @@ pub fn init_project(folder: String) -> Result<(), String> {
 
     // git pull, если это репо (ошибки — не критично: может не быть remote)
     if root.join(".git").exists() {
-        let _ = Command::new("git")
-            .args(["-C", &folder, "pull", "--ff-only"])
-            .status();
+        let _ = git_command(&["-C", &folder, "pull", "--ff-only"]).status();
     }
 
     // служебные папки
@@ -220,12 +254,40 @@ pub fn write_attachment(base: String, path: String, data_url: String) -> Result<
     fs::write(p, bytes).map_err(|e| e.to_string())
 }
 
+/// Прочитать все вложения локализации (из <base>/<number>/attachments/)
+/// как base64 data URL. Используется при открытии локализации на просмотр —
+/// чтобы изображения в теле (attachments/xxx.png) отображались.
+/// read_localizations читает только .md-файлы (текст), не бинарные вложения;
+/// этот команд — отдельный, вызывается лениво при openFolder/openFile.
+#[tauri::command]
+pub fn read_attachments(base: String, number: String) -> Vec<AttachmentEntry> {
+    let mut out = Vec::new();
+    if number.is_empty() { return out; }
+    let dir = Path::new(&base).join(&number).join("attachments");
+    if let Ok(entries) = fs::read_dir(&dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if !p.is_file() { continue; }
+            let name = e.file_name().to_string_lossy().to_string();
+            if let Ok(bytes) = fs::read(&p) {
+                let mime = guess_mime(&name);
+                let b64 = BASE64_STANDARD.encode(&bytes);
+                out.push(AttachmentEntry {
+                    path: format!("attachments/{}", name),
+                    name,
+                    data_url: format!("data:{};base64,{}", mime, b64),
+                });
+            }
+        }
+    }
+    out
+}
+
 // --- Git (host binary; credentials — через системный git) ---
 
 #[tauri::command]
 pub fn git_pull(base: String) -> Result<(), String> {
-    let out = Command::new("git")
-        .args(["-C", &base, "pull", "--ff-only"])
+    let out = git_command(&["-C", &base, "pull", "--ff-only"])
         .output()
         .map_err(|e| e.to_string())?;
     if out.status.success() {
@@ -240,7 +302,7 @@ pub fn git_pull(base: String) -> Result<(), String> {
 pub fn git_sync(base: String, commit_message: String, author_name: String, author_email: String) -> Result<(), String> {
     let author = format!("{} <{}>", author_name, author_email);
     let run = |args: &[&str]| -> Result<(), String> {
-        let out = Command::new("git").args(args).output().map_err(|e| e.to_string())?;
+        let out = git_command(args).output().map_err(|e| e.to_string())?;
         if out.status.success() {
             Ok(())
         } else {
@@ -258,8 +320,7 @@ pub fn git_sync(base: String, commit_message: String, author_name: String, autho
 /// Список локальных веток в папке.
 #[tauri::command]
 pub fn git_branches(folder: String) -> Result<Vec<String>, String> {
-    let out = Command::new("git")
-        .args(["-C", &folder, "branch", "--list", "--format=%(refname:short)"])
+    let out = git_command(&["-C", &folder, "branch", "--list", "--format=%(refname:short)"])
         .output()
         .map_err(|e| e.to_string())?;
     if out.status.success() {
@@ -277,7 +338,7 @@ pub fn git_branches(folder: String) -> Result<Vec<String>, String> {
 #[tauri::command]
 pub fn git_checkout_pull(folder: String, branch: String) -> Result<(), String> {
     let run = |args: &[&str]| -> Result<(), String> {
-        let out = Command::new("git").args(args).output().map_err(|e| e.to_string())?;
+        let out = git_command(args).output().map_err(|e| e.to_string())?;
         if out.status.success() {
             Ok(())
         } else {

@@ -18,6 +18,7 @@ pub fn run() {
             commands::delete_file,
             commands::rename_file,
             commands::write_attachment,
+            commands::read_attachments,
             commands::git_pull,
             commands::git_sync,
             commands::git_branches,

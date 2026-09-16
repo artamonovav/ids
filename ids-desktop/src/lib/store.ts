@@ -35,6 +35,29 @@ function uuid(): string {
 /** Rust возвращает { path, content, modified } — парсим в Localization. */
 interface FileEntry { path: string; content: string; modified: number }
 
+interface AttachmentEntry { path: string; name: string; data_url: string }
+
+/** Ленивая загрузка вложений локализации с диска (для отображения картинок
+ *  при просмотре). read_localizations читает только .md-текст; бинарные
+ *  вложения (attachments/xxx.png) — отдельным командом read_attachments.
+ *  Вызывается из openFolder/openFile ДО set({editing}) — к моменту рендера
+ *  EditorView activeFile.attachments уже заполнен, useEffect
+ *  инициализирует локальный state правильно. */
+async function loadAttachmentsFor(number: string, fileId: string) {
+  if (!number) return
+  const { base } = useStore.getState()
+  try {
+    const atts = await invoke<AttachmentEntry[]>("read_attachments", { base, number })
+    useStore.setState((s) => ({
+      files: s.files.map((f) =>
+        f.id === fileId
+          ? { ...f, attachments: atts.map((a) => ({ path: a.path, name: a.name, dataUrl: a.data_url })) }
+          : f
+      ),
+    }))
+  } catch { /* папки attachments/ нет или ошибка — оставляем [] */ }
+}
+
 function parseFileEntries(entries: FileEntry[]): Localization[] {
   const result: Localization[] = []
   for (const e of entries) {
@@ -197,15 +220,23 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   setView: (v) => set({ view: v }),
-  openFolder: (number) => {
+  openFolder: async (number) => {
     const main =
       get().files.find((f) => f.number === number && f.fileName === "localization.md") ??
       get().files.find((f) => f.number === number)
-    if (main) set({ view: "editor", editing: { number, fileId: main.id } })
+    if (main) {
+      // Загрузить вложения с диска ДО set({editing}) — чтобы к моменту
+      // рендера EditorView activeFile.attachments был заполнен.
+      await loadAttachmentsFor(number, main.id)
+      set({ view: "editor", editing: { number, fileId: main.id } })
+    }
   },
-  openFile: (fileId) => {
+  openFile: async (fileId) => {
     const f = get().files.find((x) => x.id === fileId)
-    if (f) set({ view: "editor", editing: { number: f.number, fileId: f.id } })
+    if (f) {
+      if (f.number) await loadAttachmentsFor(f.number, f.id)
+      set({ view: "editor", editing: { number: f.number, fileId: f.id } })
+    }
   },
   closeEditor: () => set({ view: "workspace", editing: { number: null, fileId: null } }),
 
