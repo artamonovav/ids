@@ -1,13 +1,9 @@
 name: Release (Tauri desktop)
 
-# Сборка десктоп-бинарников IDS через Tauri 2 под Windows / macOS / Linux.
-# Требует src-tauri/ (проект Tauri). Пока его нет — сборка аккуратно пропускается
-# (шаг «Проверка наличия src-tauri» после checkout). Создать src-tauri: README 3.1.
-#
+# Кроссплатформенная сборка IDS desktop (Tauri 2) по тегу v*.
+# Проект — ids-desktop/ (self-contained: фронтенд + src-tauri внутри).
 # Запуск: git tag v0.1.0 && git push origin v0.1.0
-#
-# Примечание: hashFiles() НЕ работает на уровне jobs.<id>.if — поэтому проверка
-# делается отдельным шагом (shell: bash) после checkout.
+# Артефакты (.msi/.exe, .app/.dmg, .deb/.AppImage) — в GitHub Release (черновик).
 
 on:
   push:
@@ -30,15 +26,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Проверка наличия src-tauri
+      - name: Проверка ids-desktop/src-tauri
         id: tauri_exists
         shell: bash
         run: |
-          if [ -f src-tauri/tauri.conf.json ]; then
+          if [ -f ids-desktop/src-tauri/tauri.conf.json ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::src-tauri/tauri.conf.json не найден — сборка пропущена. Создайте Tauri-проект (README 3.1)."
+            echo "::notice::ids-desktop/src-tauri не найден — сборка пропущена."
           fi
 
       - uses: oven-sh/setup-bun@v2
@@ -49,19 +45,30 @@ jobs:
           node-version: 20
       - uses: dtolnay/rust-toolchain@stable
         if: steps.tauri_exists.outputs.exists == 'true'
+
       - name: Linux system deps (webkit2gtk-4.1)
         if: steps.tauri_exists.outputs.exists == 'true' && matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-      - run: bun install --frozen-lockfile
+
+      - name: Install frontend deps
         if: steps.tauri_exists.outputs.exists == 'true'
+        run: bun install --frozen-lockfile
+        working-directory: ids-desktop
+
+      - name: Generate icons (logo.svg -> tauri icon)
+        if: steps.tauri_exists.outputs.exists == 'true'
+        run: bash build-icons.sh
+        working-directory: ids-desktop
+
       - uses: tauri-apps/tauri-action@v0
         if: steps.tauri_exists.outputs.exists == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          projectPath: ids-desktop
           tagName: ${{ github.ref_name }}
           releaseName: "IDS ${{ github.ref_name }}"
           releaseDraft: true
