@@ -11,13 +11,24 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { ArrowLeft, Plus, X, Save } from "lucide-react"
+import { ArrowLeft, Plus, X, Save, RotateCcw } from "lucide-react"
 import {
   DICT_FILES,
   TEMPLATE_PATH,
@@ -128,6 +139,7 @@ export function SettingsView() {
   const writeTemplateFile = useStore((s) => s.writeTemplateFile)
   const setView = useStore((s) => s.setView)
   const setOffline = useStore((s) => s.setOffline)
+  const resetProject = useStore((s) => s.resetProject)
   const { toast } = useToast()
 
   const dictionaries: Dictionaries = React.useMemo(
@@ -231,8 +243,32 @@ export function SettingsView() {
             placeholder="не указана"
           />
           <p className="text-[11px] text-muted-foreground">
-            Чтобы сменить папку — пересоздайте проект (удалите <code className="font-mono">paths.json</code> в данных приложения).
+            Чтобы сменить папку — сбросьте проект и пройдите инициализацию заново.
+            Файлы на диске не удаляются.
           </p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="w-full">
+                <RotateCcw className="size-4" /> Сменить папку / сбросить проект
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Сменить папку проекта?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Приложение забудет текущую папку и вернётся к мастеру настройки.
+                  Выберите новую папку (или ту же) и пройдите инициализацию заново.
+                  Файлы на диске не удаляются.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Отмена</AlertDialogCancel>
+                <AlertDialogAction onClick={() => resetProject()}>
+                  Сбросить и выбрать новую папку
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </Section>
 
         {/* Справочники */}

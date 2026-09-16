@@ -139,6 +139,7 @@ interface State {
 
   init: () => Promise<void>
   completeSetup: (folder: string, name: string, email: string, branch: string) => Promise<void>
+  resetProject: () => Promise<void>
   setView: (v: View) => void
   openFolder: (number: string) => void
   openFile: (fileId: string) => void
@@ -217,6 +218,24 @@ export const useStore = create<State>()((set, get) => ({
     await invoke("git_checkout_pull", { folder, branch })
     // перезагрузить данные
     await get().init()
+  },
+
+  resetProject: async () => {
+    // Очистить paths.json (забыть текущую папку) и сбросить store к мастеру
+    // настройки. Файлы на диске НЕ удаляются — пользователь выберет новую
+    // папку (или ту же) и пройдёт инициализацию заново.
+    await invoke("set_folder", { folder: "" })
+    set({
+      base: "",
+      files: [],
+      repoFiles: {},
+      view: "setup",
+      editing: { number: null, fileId: null },
+      syncStatus: "green",
+      syncError: null,
+      syncing: false,
+      lastCommitMessage: null,
+    })
   },
 
   setView: (v) => set({ view: v }),

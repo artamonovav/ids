@@ -65,6 +65,40 @@ jobs:
         run: bash build-icons.sh
         working-directory: ids-desktop
 
+      # Установить версию из git-тега (v0.1.2 → 0.1.2) во все конфиги,
+      # которые Tauri использует для имени артефакта. Без этого .deb/.msi/.app
+      # получали версию 0.1.0 из захардкоженного tauri.conf.json/Cargo.toml.
+      - name: Set version from git tag
+        if: steps.tauri_exists.outputs.exists == 'true'
+        shell: bash
+        working-directory: ids-desktop
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          # Strip leading 'v' (v0.1.2 → 0.1.2)
+          export VERSION="${VERSION#v}"
+          echo "Setting version to: $VERSION"
+          node -e '
+          const fs = require("fs");
+          const v = process.env.VERSION;
+          if (!v) { console.error("VERSION env not set"); process.exit(1); }
+          // tauri.conf.json — используется для имени .deb/.msi/.app
+          let conf = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
+          conf.version = v;
+          fs.writeFileSync("src-tauri/tauri.conf.json", JSON.stringify(conf, null, 2) + "\n");
+          // Cargo.toml [package] version — fallback, если tauri.conf.json version пуст
+          let cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
+          cargo = cargo.replace(/^version = ".*"/m, `version = "${v}"`);
+          fs.writeFileSync("src-tauri/Cargo.toml", cargo);
+          // package.json — для консистентности
+          let pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          pkg.version = v;
+          fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+          console.log("Updated version to " + v);
+          '
+          echo "=== verify ==="
+          grep -hE '"version"|^version' src-tauri/tauri.conf.json src-tauri/Cargo.toml package.json
+
       - uses: tauri-apps/tauri-action@v0
         if: steps.tauri_exists.outputs.exists == 'true'
         env:
