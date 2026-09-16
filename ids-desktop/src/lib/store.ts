@@ -7,7 +7,7 @@
 import { create } from "zustand"
 import { invoke } from "@tauri-apps/api/core"
 import type { Localization, Settings, SyncStatus, View, DictName } from "./types"
-import { formatAuthor, commitMessageFor, serializeDocument } from "./frontmatter"
+import { formatAuthor, commitMessageFor, serializeDocument, parseFrontmatter } from "./frontmatter"
 import {
   tempFileName,
   readTemplate,
@@ -30,6 +30,49 @@ function uuid(): string {
     const r = Math.random() * 16 | 0
     return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
   })
+}
+
+/** Rust возвращает { path, content, modified } — парсим в Localization. */
+interface FileEntry { path: string; content: string; modified: number }
+
+function parseFileEntries(entries: FileEntry[]): Localization[] {
+  const result: Localization[] = []
+  for (const e of entries) {
+    let number = ""
+    let fileName = e.path
+    if (e.path.includes("/")) {
+      const idx = e.path.indexOf("/")
+      number = e.path.slice(0, idx)
+      fileName = e.path.slice(idx + 1)
+    }
+    if (number === ".tmp") {
+      number = ""
+      fileName = e.path  // .tmp/xxx.md
+    }
+    const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(e.content)
+    const frontmatter = m ? parseFrontmatter(m[1]) : { ...EMPTY_FRONTMATTER }
+    const body = m ? m[2].replace(/^\n+/, "") : e.content
+    result.push({
+      id: e.path,
+      number,
+      fileName,
+      frontmatter,
+      body,
+      attachments: [],
+      createdAt: e.modified,
+      updatedAt: e.modified,
+      dirty: false,
+      synced: true,
+    })
+  }
+  // parentId для уточнений (localization-N.md)
+  for (const f of result) {
+    if (/^localization-\d+\.md$/.test(f.fileName)) {
+      const main = result.find((r) => r.number === f.number && r.fileName === "localization.md")
+      if (main) f.parentId = main.id
+    }
+  }
+  return result
 }
 
 function pathFor(f: Localization): string {
@@ -118,7 +161,8 @@ export const useStore = create<State>()((set, get) => ({
         await invoke("write_file", { base: folder, path: TEMPLATE_PATH, content })
         repoFiles[TEMPLATE_PATH] = content
       }
-      const files = await invoke<Localization[]>("read_localizations", { base: folder })
+      const entries = await invoke<FileEntry[]>("read_localizations", { base: folder })
+      const files = parseFileEntries(entries)
       set({
         base: folder,
         repoFiles,

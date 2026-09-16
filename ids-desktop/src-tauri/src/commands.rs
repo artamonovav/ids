@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::SystemTime;
 use tauri::Manager;
 use serde::Serialize;
 use base64::{Engine as _, prelude::BASE64_STANDARD};
@@ -15,10 +16,21 @@ use base64::{Engine as _, prelude::BASE64_STANDARD};
 pub struct FileEntry {
     pub path: String,
     pub content: String,
+    pub modified: u64,
 }
 
 fn join(base: &str, rel: &str) -> PathBuf {
     Path::new(base).join(rel)
+}
+
+/// mtime файла как Unix-миллисекунды.
+fn file_mtime(p: &Path) -> u64 {
+    fs::metadata(p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Путь к файлу-указателю (paths.json) в app_data_dir.
@@ -124,7 +136,7 @@ pub fn read_localizations(base: String) -> Vec<FileEntry> {
                     if fp.extension().and_then(|s| s.to_str()) == Some("md") {
                         let rel = format!("{}/{}", name, f.file_name().to_string_lossy());
                         if let Ok(content) = fs::read_to_string(&fp) {
-                            out.push(FileEntry { path: rel, content });
+                            out.push(FileEntry { path: rel, content, modified: file_mtime(&fp) });
                         }
                     }
                 }
@@ -138,7 +150,7 @@ pub fn read_localizations(base: String) -> Vec<FileEntry> {
             if fp.extension().and_then(|s| s.to_str()) == Some("md") {
                 let rel = format!(".tmp/{}", f.file_name().to_string_lossy());
                 if let Ok(content) = fs::read_to_string(&fp) {
-                    out.push(FileEntry { path: rel, content });
+                    out.push(FileEntry { path: rel, content, modified: file_mtime(&fp) });
                 }
             }
         }
