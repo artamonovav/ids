@@ -14,6 +14,7 @@ import {
   Code as CodeIcon,
   Link as LinkIcon,
   Image as ImageIcon,
+  Paperclip,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -100,6 +101,8 @@ export function MarkdownEditor({
   initialMode = 'split',
 }: MarkdownEditorProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+  const imageInputRef = React.useRef<HTMLInputElement>(null)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [mode, setMode] = React.useState<Mode>(initialMode)
 
   const restoreSelection = React.useCallback(
@@ -187,6 +190,29 @@ export function MarkdownEditor({
           onChange(value + insert)
           return
         }
+        const start = ta.selectionStart
+        const end = ta.selectionEnd
+        const newValue = value.slice(0, start) + insert + value.slice(end)
+        onChange(newValue)
+        const newCursor = start + insert.length
+        restoreSelection(newCursor, newCursor)
+      }
+      reader.readAsDataURL(file)
+    },
+    [value, onChange, onAddAttachment, restoreSelection],
+  )
+
+  const handleFileAttachment = React.useCallback(
+    (file: File) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === 'string' ? reader.result : ''
+        const name = file.name
+        const path = `attachments/${name}`
+        onAddAttachment?.({ path, name, dataUrl })
+        const insert = `[${name}](${path})`
+        const ta = textareaRef.current
+        if (!ta) { onChange(value + insert); return }
         const start = ta.selectionStart
         const end = ta.selectionEnd
         const newValue = value.slice(0, start) + insert + value.slice(end)
@@ -358,6 +384,27 @@ export function MarkdownEditor({
       onValueChange={(v) => setMode(v as Mode)}
       className="w-full"
     >
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) handleImageFile(f)
+          e.target.value = ''
+        }}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) handleFileAttachment(f)
+          e.target.value = ''
+        }}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <TabsList>
           <TabsTrigger value="split">Совмещённо</TabsTrigger>
@@ -415,11 +462,14 @@ export function MarkdownEditor({
             onClick={() => insertAtCursor('[', '](url)', 'текст')}
           />
           <ToolbarButton
-            label="Изображение"
+            label="Изображение (из файла)"
             icon={ImageIcon}
-            onClick={() =>
-              insertAtCursor('![', '](attachments/image.png)', 'описание')
-            }
+            onClick={() => imageInputRef.current?.click()}
+          />
+          <ToolbarButton
+            label="Файл в attachments"
+            icon={Paperclip}
+            onClick={() => fileInputRef.current?.click()}
           />
         </div>
       )}
