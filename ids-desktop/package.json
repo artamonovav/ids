@@ -60,6 +60,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tailwindcss/vite": "^4",
     "@tauri-apps/cli": "^2",
     "@resvg/resvg-js": "^2",
     "@types/node": "^22",
