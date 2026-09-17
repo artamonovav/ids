@@ -344,12 +344,26 @@ export function MarkdownEditor({
   const resolveImageSrc = React.useCallback(
     (src?: string): string | undefined => {
       if (typeof src !== 'string') return src
-      if (src.startsWith('attachments/')) {
-        const byPath = attachments.find((a) => a.path === src)
+      // Внешние URL и data: — не трогаем.
+      if (/^(https?:|data:)/.test(src)) return src
+      // Нормализовать: убрать leading './' — старые/внешние локализации
+      // используют ./attachments/xxx.png, а приложение пишет attachments/xxx.png.
+      // Без этого startsWith('attachments/') не матчится → картинка не резолвится.
+      let norm = src.replace(/^\.\//, '')
+      while (norm.startsWith('./')) norm = norm.slice(2)
+      if (norm.startsWith('attachments/')) {
+        const byPath = attachments.find((a) => a.path === norm)
         if (byPath) return byPath.dataUrl
-        const name = src.replace('attachments/', '')
+        const name = norm.replace('attachments/', '')
         const byName = attachments.find((a) => a.name === name)
         if (byName) return byName.dataUrl
+      }
+      // Fallback: сопоставление по basename (имени файла без пути) — для случаев,
+      // когда путь в markdown отличается от attachments/xxx.png, но файл тот же.
+      const basename = norm.split('/').pop() || norm
+      if (basename) {
+        const byBasename = attachments.find((a) => a.name === basename)
+        if (byBasename) return byBasename.dataUrl
       }
       return src
     },
