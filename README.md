@@ -237,6 +237,30 @@ variables → Actions → New repository secret):
 «Verified Developer» в Finder. См. `release.yml` — блок `APPLE_*` env в шаге
 `tauri-action` (пустые секреты = unsigned, текущее поведение).
 
+### CI: «Resource not accessible by integration» при создании релиза
+
+Если `tauri-action` падает с `Error: Resource not accessible by integration`
+при попытке создать GitHub Release — `GITHUB_TOKEN` не имеет прав на запись.
+Для новых репозиториев GitHub по умолчанию выставляет **read-only** workflow
+permissions, и `permissions: contents: write` в workflow НЕ помогает (новое
+поведение GitHub с 2023).
+
+**Фикс** (один раз, в настройках репо):
+1. Repo **Settings → Actions → General**.
+2. Прокрутить до «Workflow permissions».
+3. Выбрать **«Read and write permissions»** (не «Read repository contents...»).
+4. **Save**.
+5. Перепушить тег (или re-run failed workflow).
+
+В `release.yml` есть шаг **«Ensure draft release exists»** — он fail-fast:
+падает с понятной ошибкой **до** долгой сборки Rust, а не после 3+ минут.
+Если видите его ошибку — это та самая проблема с permissions.
+
+**Альтернатива** (если org-политика запрещает elevate): создать PAT
+(Personal Access Token, classic, scope `repo`), добавить как secret
+`RELEASE_TOKEN`, и в `release.yml` заменить `GITHUB_TOKEN` → `RELEASE_TOKEN`
+в env шага `tauri-action` и шага «Ensure draft release exists».
+
 ---
 
 ## 8. CI / Автоматизация (GitHub Actions)
