@@ -325,18 +325,47 @@ pub fn git_sync(base: String, commit_message: String, author_name: String, autho
 /// Список локальных веток в папке.
 #[tauri::command]
 pub fn git_branches(folder: String) -> Result<Vec<String>, String> {
-    let out = git_command(&["-C", &folder, "branch", "--list", "--format=%(refname:short)"])
+    // Fetch remote-веток (для multi-user — актуальный список с сервера).
+    // --prune: удалить умершие remote-tracking ветки. Ошибки fetch не критичны
+    // (нет сети/remote — продолжаем с локальными ветками).
+    let _ = git_command(&["-C", &folder, "fetch", "--all", "--prune"]).output();
+
+    // Локальные ветки
+    let local_out = git_command(&["-C", &folder, "branch", "--list", "--format=%(refname:short)"])
         .output()
         .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout)
+    let mut branches: Vec<String> = if local_out.status.success() {
+        String::from_utf8_lossy(&local_out.stdout)
             .lines()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
-            .collect())
+            .collect()
     } else {
-        Err(String::from_utf8_lossy(&out.stderr).to_string())
+        Vec::new()
+    };
+
+    // Remote-ветки (origin/xxx) — strip префикса origin/, фильтр HEAD.
+    // git checkout <name> (DWIM) создаёт локальную tracking-ветку из origin/<name>.
+    let remote_out = git_command(&["-C", &folder, "branch", "-r", "--format=%(refname:short)"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if remote_out.status.success() {
+        for line in String::from_utf8_lossy(&remote_out.stdout).lines() {
+            let s = line.trim();
+            if s.is_empty() || s.contains("HEAD") {
+                continue;
+            }
+            if let Some(name) = s.strip_prefix("origin/") {
+                let name = name.to_string();
+                if !branches.contains(&name) {
+                    branches.push(name);
+                }
+            }
+        }
     }
+
+    branches.sort();
+    Ok(branches)
 }
 
 /// git checkout <branch> && git pull --ff-only

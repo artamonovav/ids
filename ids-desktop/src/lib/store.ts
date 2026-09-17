@@ -405,6 +405,7 @@ export const useStore = create<State>()((set, get) => ({
     const dirtyKb = get().files.filter(
       (f) => f.dirty && f.number && !f.fileName.startsWith(".tmp/")
     )
+    const dirtyKbIds = new Set(dirtyKb.map((f) => f.id))
     const commitMessage = dirtyKb.map(commitMessageFor).join("; ") || "IDS sync"
     const cfg = readConfig(get().repoFiles)
     try {
@@ -414,14 +415,26 @@ export const useStore = create<State>()((set, get) => ({
         authorName: cfg.profile.name || "IDS",
         authorEmail: cfg.profile.email || "ids@local",
       })
+      // RE-READ from disk: git_sync делает pull --rebase → на диске изменения
+      // от других пользователей (multi-user). Без re-read store остался бы
+      // stale — показывал бы старую версию без remote-изменений.
+      const entries = await invoke<FileEntry[]>("read_localizations", { base })
+      const diskFiles = parseFileEntries(entries)
+      const repoFiles = await invoke<Record<string, string>>("read_repo_files", { base })
       set((s) => ({
         syncing: false,
         syncStatus: "green",
         syncError: null,
-        files: s.files.map((f) =>
-          f.dirty && f.number && !f.fileName.startsWith(".tmp/")
-            ? { ...f, dirty: false, synced: true } : f
-        ),
+        repoFiles,
+        // Merge: dirty .tmp-черновики (не synced, пользователь редактирует) →
+        // оставляем локальную версию. Всё остальное (synced KB + clean) →
+        // диск-версия (с remote-изменениями после pull --rebase).
+        files: diskFiles.map((df) => {
+          const localDirtyDraft = s.files.find(
+            (f) => f.id === df.id && f.dirty && !dirtyKbIds.has(f.id)
+          )
+          return localDirtyDraft ?? df
+        }),
         lastCommitMessage: commitMessage,
       }))
     } catch (e) {
