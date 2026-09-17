@@ -99,22 +99,42 @@ jobs:
           echo "=== verify ==="
           grep -hE '"version"|^version' src-tauri/tauri.conf.json src-tauri/Cargo.toml package.json
 
+      # macOS: экспортировать APPLE_* в $GITHUB_env ТОЛЬКО если все 4 секрета
+      # заданы. tauri-action наследует env от предыдущих шагов. Если секреты
+      # пустые — APPLE_* НЕ экспортируются → tauri не пытается подписать →
+      # unsigned build (без ошибки "no identity found"). Если заданы —
+      # подпись Developer ID Application + нотаризация.
+      #
+      # ВАЖНО: нельзя просто написать APPLE_SIGNING_IDENTITY: ${{ secrets.X }}
+      # в env: шага tauri-action — GitHub подставит пустую строку, а Tauri
+      # воспримет её как "подпиши с пустой identity" → codesign: no identity found.
+      - name: Prepare macOS signing env (conditional)
+        if: steps.tauri_exists.outputs.exists == 'true' && matrix.platform == 'macos-latest'
+        env:
+          SID: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          AID: ${{ secrets.APPLE_ID }}
+          APW: ${{ secrets.APPLE_PASSWORD }}
+          TID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          if [ -n "$SID" ] && [ -n "$AID" ] && [ -n "$APW" ] && [ -n "$TID" ]; then
+            echo "APPLE_SIGNING_IDENTITY=$SID" >> "$GITHUB_ENV"
+            echo "APPLE_ID=$AID" >> "$GITHUB_ENV"
+            echo "APPLE_PASSWORD=$APW" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$TID" >> "$GITHUB_ENV"
+            echo "### macOS signing: ENABLED (will sign + notarize) ###"
+          else
+            echo "### macOS signing: DISABLED (APPLE_* secrets not set → unsigned build) ###"
+            echo "### Users need: xattr -cr /Applications/IDS.app (see README §7) ###"
+          fi
+
       - uses: tauri-apps/tauri-action@v0
         if: steps.tauri_exists.outputs.exists == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS code signing + notarization (ОПЦИОНАЛЬНО).
-          # Если GitHub Secrets заданы — приложение подписывается (Developer ID
-          # Application) и нотаризуется (Apple notarization service). Gatekeeper
-          # пропустит без предупреждения «повреждено».
-          # Если секретов НЕТ — сборка unsigned, пользователю нужен xattr -cr
-          # (см. README раздел 7 «macOS: приложение повреждено»).
-          # tauri-action сам проверяет env на пустоту и пропускает шаг если
-          # не задано → пустые секреты = текущее поведение (unsigned).
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # APPLE_* наследуются от предыдущего шага через $GITHUB_ENV
+          # (только если все 4 секрета заданы). Не заданы → env не содержит
+          # APPLE_* → tauri пропускает подпись → unsigned build.
         with:
           projectPath: ids-desktop
           tagName: ${{ github.ref_name }}
