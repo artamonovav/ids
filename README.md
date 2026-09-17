@@ -149,6 +149,13 @@ Tauri **нельзя** кросскомпилировать между ОС из
 Для кроссплатформенной сборки бинарников рекомендован CI (GitHub Actions matrix:
 `ubuntu-latest`, `windows-latest`, `macos-latest`) — там Rust предустановлен.
 
+### 3.4 Очистка после сборки
+```bash
+bash clean.sh --dry-run      # показать что найдёт, не удалять
+bash clean.sh                # удалить всё кроме Rust target/
+bash clean.sh --deep         # включая Rust target/ (~ГБ, долго пересобирать)
+bash clean.sh --help         # справка
+```
 ---
 
 ## 4. Сборка под все платформы (шпаргалка)
