@@ -103,6 +103,18 @@ jobs:
         if: steps.tauri_exists.outputs.exists == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing + notarization (ОПЦИОНАЛЬНО).
+          # Если GitHub Secrets заданы — приложение подписывается (Developer ID
+          # Application) и нотаризуется (Apple notarization service). Gatekeeper
+          # пропустит без предупреждения «повреждено».
+          # Если секретов НЕТ — сборка unsigned, пользователю нужен xattr -cr
+          # (см. README раздел 7 «macOS: приложение повреждено»).
+          # tauri-action сам проверяет env на пустоту и пропускает шаг если
+          # не задано → пустые секреты = текущее поведение (unsigned).
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: ids-desktop
           tagName: ${{ github.ref_name }}

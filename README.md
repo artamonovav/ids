@@ -205,6 +205,40 @@ docker-compose.yml    dev + app + tauri
 - **Корпоративный прокси** — `docker build --build-arg HTTP_PROXY=...` и
   `bun config` / `npm config` для реестров.
 
+### macOS: «приложение повреждено и его не удалось открыть»
+
+Gatekeeper блокирует **unsigned**-сборки (без Apple Developer-подписи). Браузер
+ставит quarantine-флаг при скачивании, macOS пишет «повреждено» вместо
+«неизвестный разработчик».
+
+**Workaround без пересборки** (выполнить в Terminal):
+```bash
+# Снять quarantine-флаг с приложения (где бы оно ни лежало):
+xattr -cr /Applications/IDS.app
+# После этого — обычный double-click запустит приложение.
+open /Applications/IDS.app
+```
+`xattr -cr` снимает расширенные атрибуты (включая `com.apple.quarantine`).
+Альтернатива: System Settings → Privacy & Security → «Open Anyway».
+
+**Полный фикс — нотаризация** (нужен Apple Developer Account, $99/год). CI уже
+поддерживает — задайте GitHub Secrets в репозитории (Settings → Secrets and
+variables → Actions → New repository secret):
+
+| Secret | Значение | Где взять |
+|---|---|---|
+| `APPLE_SIGNING_IDENTITY` | `Developer ID Application: Your Name (TEAMID)` | Keychain Access → сертификат |
+| `APPLE_ID` | Apple ID (email) | ваш Apple ID |
+| `APPLE_PASSWORD` | app-specific password | appleid.apple.com → Sign-In and Security → App-Specific Passwords |
+| `APPLE_TEAM_ID` | Team ID (10 символов) | developer.apple.com → Membership Details |
+
+При следующем пуше тега `v*` CI автоматически подпишет (Developer ID Application)
+и нотаризует `.app`/`.dmg`. Gatekeeper пропустит без «повреждено», ярлык
+«Verified Developer» в Finder. См. `release.yml` — блок `APPLE_*` env в шаге
+`tauri-action` (пустые секреты = unsigned, текущее поведение).
+
+---
+
 ## 8. CI / Автоматизация (GitHub Actions)
 
 В `.github/workflows/` два сценария:
