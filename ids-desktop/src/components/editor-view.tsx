@@ -109,7 +109,7 @@ export function EditorView() {
   const [body, setBody] = React.useState<string>(activeFile?.body ?? "")
   const [attachments, setAttachments] = React.useState<Attachment[]>(activeFile?.attachments ?? [])
   const [showSource, setShowSource] = React.useState(false)
-  const [fmOpen, setFmOpen] = React.useState(true)
+  const [fmOpen, setFmOpen] = React.useState(() => activeFile?.dirty ?? false)
   const [alertOpen, setAlertOpen] = React.useState(false)
   const [missing, setMissing] = React.useState<string[]>([])
 
@@ -119,6 +119,9 @@ export function EditorView() {
     setFm(activeFile.frontmatter)
     setBody(activeFile.body)
     setAttachments(activeFile.attachments)
+    // Просмотр сохранённой локализации (dirty=false) → frontmatter свёрнут;
+    // редактирование черновика (dirty=true) → развёрнут для заполнения полей.
+    setFmOpen(activeFile.dirty ?? false)
   }, [editing.fileId])
 
   // Автосохранение недооформленных черновиков прямо в .tmp-запись
