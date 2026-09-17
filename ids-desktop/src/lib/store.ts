@@ -44,7 +44,7 @@ interface AttachmentEntry { path: string; name: string; data_url: string }
  *  EditorView activeFile.attachments уже заполнен, useEffect
  *  инициализирует локальный state правильно. */
 async function loadAttachmentsFor(number: string, fileId: string) {
-  if (!number) return
+  // number пустой → .tmp-черновик → read_attachments читает .tmp/attachments/
   const { base } = useStore.getState()
   try {
     const atts = await invoke<AttachmentEntry[]>("read_attachments", { base, number })
@@ -108,20 +108,27 @@ function pathFor(f: Localization): string {
   return f.number ? `${f.number}/${f.fileName}` : ""
 }
 
+/** Записать вложения на диск.
+ *  KB-файлы (number=SPAS-XXXX) → <number>/attachments/<name>
+ *  .tmp-черновики (number пустой) → .tmp/attachments/<name>
+ *  Без этого вложения теряются при перезапуске (в памяти, но не на диске). */
+async function writeAttachments(base: string, f: Localization) {
+  if (f.attachments.length === 0) return
+  const dir = f.number ? f.number : ".tmp"
+  for (const att of f.attachments) {
+    if (att.dataUrl) {
+      try {
+        await invoke("write_attachment", { base, path: `${dir}/${att.path}`, dataUrl: att.dataUrl })
+      } catch { /* вложение уже есть или ошибка — не критично */ }
+    }
+  }
+}
+
 async function writeLoc(base: string, f: Localization) {
   const path = pathFor(f)
   if (!path) return
   await invoke("write_file", { base, path, content: serializeDocument(f.frontmatter, f.body) })
-  // Записать вложения на диск (только для KB-файлов, не .tmp-черновиков)
-  if (f.number && f.attachments.length > 0) {
-    for (const att of f.attachments) {
-      if (att.dataUrl) {
-        try {
-          await invoke("write_attachment", { base, path: `${f.number}/${att.path}`, dataUrl: att.dataUrl })
-        } catch { /* вложение уже есть или ошибка — не критично */ }
-      }
-    }
-  }
+  await writeAttachments(base, f)
 }
 
 interface State {
@@ -253,7 +260,9 @@ export const useStore = create<State>()((set, get) => ({
   openFile: async (fileId) => {
     const f = get().files.find((x) => x.id === fileId)
     if (f) {
-      if (f.number) await loadAttachmentsFor(f.number, f.id)
+      // Загрузить вложения ВСЕГДА — даже для .tmp-черновиков (number=""),
+      // иначе картинки в черновиках теряются после перезапуска.
+      await loadAttachmentsFor(f.number, f.id)
       set({ view: "editor", editing: { number: f.number, fileId: f.id } })
     }
   },
@@ -310,6 +319,7 @@ export const useStore = create<State>()((set, get) => ({
     }
     if (newPath) {
       await invoke("write_file", { base, path: newPath, content: serializeDocument(f.frontmatter, f.body) })
+      await writeAttachments(base, f)
     }
   },
 

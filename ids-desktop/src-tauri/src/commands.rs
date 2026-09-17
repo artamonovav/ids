@@ -262,8 +262,13 @@ pub fn write_attachment(base: String, path: String, data_url: String) -> Result<
 #[tauri::command]
 pub fn read_attachments(base: String, number: String) -> Vec<AttachmentEntry> {
     let mut out = Vec::new();
-    if number.is_empty() { return out; }
-    let dir = Path::new(&base).join(&number).join("attachments");
+    // Для .tmp-черновиков (number пустой) — читать из .tmp/attachments/.
+    // Для KB-локализаций (number=SPAS-XXXX) — из <number>/attachments/.
+    let dir = if number.is_empty() {
+        Path::new(&base).join(".tmp").join("attachments")
+    } else {
+        Path::new(&base).join(&number).join("attachments")
+    };
     if let Ok(entries) = fs::read_dir(&dir) {
         for e in entries.flatten() {
             let p = e.path();
