@@ -244,6 +244,29 @@ variables → Actions → New repository secret):
 «Verified Developer» в Finder. См. `release.yml` — блок `APPLE_*` env в шаге
 `tauri-action` (пустые секреты = unsigned, текущее поведение).
 
+### Windows: portable exe — иконка не соответствует logo.svg
+
+Иконки генерируются из `ids-desktop/public/logo.svg` → `source.png` → `tauri icon`
+(все размеры + `.ico`) шагом `build-icons.sh` в CI. Иконка встраивается в `.exe`
+через `tauri_build::build()` в `build.rs` (Windows resource file).
+
+Если Explorer показывает **стандартную** иконку вместо вашей — это **Windows icon cache**:
+Windows агрессивно кэширует иконки `.exe` по имени файла. После обновления
+иконки в новом билде Explorer показывает старую (кэшированную).
+
+**Очистка кэша иконок** (в cmd от имени администратора):
+```cmd
+ie4uinit.exe -show
+```
+Альтернатива: перезапустить Explorer (Диспетчер задач → explorer.exe → Перезапустить)
+или скопировать `IDS.exe` под другим именем (новое имя = нет кэша).
+
+**Проверить что иконка встроена** (без визуальной проверки):
+```cmd
+rcedit IDS.exe --set-icon src-tauri\icons\icon.ico
+```
+(Если `rcedit` сообщает что иконка уже установлена — она встроена корректно.)
+
 ### CI: «Resource not accessible by integration» при создании релиза
 
 Если `tauri-action` падает с `Error: Resource not accessible by integration`

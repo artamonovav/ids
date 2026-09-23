@@ -21,6 +21,7 @@ import { EditorView } from "@/components/editor-view"
 import { SettingsView } from "@/components/settings-view"
 import { SetupWizard } from "@/components/setup-wizard"
 import { cn } from "@/lib/utils"
+import { getVersion } from "@tauri-apps/api/app"
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
@@ -77,6 +78,8 @@ export function AppShell() {
   const syncing = useStore((s) => s.syncing)
   const editingActive = useStore((s) => s.view === "editor" && !!s.editing.fileId)
   const { toast } = useToast()
+  const [version, setVersion] = React.useState("")
+  React.useEffect(() => { getVersion().then(setVersion).catch(() => {}) }, [])
 
   async function handleSync() {
     await sync()
@@ -130,6 +133,7 @@ export function AppShell() {
       <footer className="mt-auto border-t bg-background">
         <div className="mx-auto flex h-10 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
           <StatusPill />
+          {version && <span className="text-xs text-muted-foreground">v{version}</span>}
           <div className="flex items-center gap-3">
             {editingActive && (
               <Button

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { invoke } from "@tauri-apps/api/core"
+import { open as openDialog } from "@tauri-apps/plugin-dialog"
 import { useStore } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
@@ -42,6 +43,11 @@ export function SetupWizard() {
   const [branch, setBranch] = React.useState("")
   const [checking, setChecking] = React.useState(false)
   const [isRepo, setIsRepo] = React.useState(false)
+
+  async function browseFolder() {
+    const selected = await openDialog({ directory: true, multiple: false })
+    if (selected) setFolder(selected as string)
+  }
 
   async function checkFolder() {
     if (!folder.trim()) {
@@ -131,6 +137,10 @@ export function SetupWizard() {
                     placeholder="~/ids-kb"
                     className="font-mono text-sm"
                   />
+                  <Button variant="outline" size="sm" onClick={browseFolder}>
+                    <FolderOpen className="size-4" />
+                    <span className="hidden sm:inline">Обзор</span>
+                  </Button>
                   <Button variant="outline" size="sm" onClick={checkFolder} disabled={checking}>
                     {checking ? (
                       <Loader2 className="size-4 animate-spin" />

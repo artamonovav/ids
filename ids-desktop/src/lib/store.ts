@@ -292,6 +292,7 @@ export const useStore = create<State>()((set, get) => ({
 
   upsertFile: async (file) => {
     const { base } = get()
+    const before = get().files.find((f) => f.id === file.id)
     set((s) => ({
       files: s.files.some((f) => f.id === file.id)
         ? s.files.map((f) => (f.id === file.id ? file : f))
@@ -299,6 +300,15 @@ export const useStore = create<State>()((set, get) => ({
       syncStatus: "yellow",
     }))
     await writeLoc(base, file)
+    // Промоушен .tmp → KB: удалить старый .tmp-черновик + его вложения.
+    // writeLoc уже записал KB-файл + вложения в <number>/attachments/.
+    // Старый .tmp/<draft>.md и .tmp/attachments/<name> — orphaned, удаляем.
+    if (before && before.fileName.startsWith(".tmp/") && !file.fileName.startsWith(".tmp/") && file.number) {
+      try { await invoke("delete_file", { base, path: before.fileName }) } catch { /* old gone */ }
+      for (const att of file.attachments) {
+        try { await invoke("delete_file", { base, path: `.tmp/${att.path}` }) } catch { /* gone */ }
+      }
+    }
   },
 
   patchFile: async (id, patch) => {
