@@ -23,18 +23,28 @@ import { SetupWizard } from "@/components/setup-wizard"
 import { cn } from "@/lib/utils"
 import { getVersion } from "@tauri-apps/api/app"
 
+const THEMES = ["light", "dark", "darcula"] as const
+
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
+  const cycle = () => {
+    const cur = (resolvedTheme || "light") as typeof THEMES[number]
+    const idx = THEMES.indexOf(cur)
+    setTheme(THEMES[(idx + 1) % THEMES.length])
+  }
+  const isDark = resolvedTheme === "dark" || resolvedTheme === "darcula"
+  const label = resolvedTheme === "darcula" ? "Darcula" : resolvedTheme === "dark" ? "Тёмная" : "Светлая"
   return (
     <Button
       variant="ghost"
       size="icon"
       aria-label="Сменить тему"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      title={label}
+      onClick={cycle}
     >
-      {mounted && resolvedTheme === "dark" ? (
+      {mounted && isDark ? (
         <Sun className="size-5" />
       ) : (
         <Moon className="size-5" />

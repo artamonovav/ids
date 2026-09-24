@@ -292,7 +292,7 @@ export function FrontmatterForm({
       {/* 8. flaky */}
       <div className="flex flex-col gap-1">
         <Label htmlFor="fm-flaky" className="text-xs">
-          Плавающая ошибка <RequiredAsterisk />
+          Плавающая ошибка
         </Label>
         <div className="flex items-center gap-3">
           <Switch

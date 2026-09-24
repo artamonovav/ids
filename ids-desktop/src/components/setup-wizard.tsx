@@ -99,6 +99,18 @@ export function SetupWizard() {
       toast({ title: err, variant: "destructive" })
       return
     }
+    // На шаге выбора ветки — чекаут выбранной ветки с сервера перед переходом
+    if (step === 1 && branch) {
+      invoke("git_checkout_pull", { folder, branch })
+        .then(() => {
+          toast({ title: `Ветка ${branch} переключена`, description: "Обновления с сервера получены." })
+          setStep(step + 1)
+        })
+        .catch((e) => {
+          toast({ title: "Ошибка checkout ветки", description: String(e), variant: "destructive" })
+        })
+      return
+    }
     if (step < STEPS.length - 1) setStep(step + 1)
     else finish()
   }

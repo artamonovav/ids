@@ -371,9 +371,11 @@ export const useStore = create<State>()((set, get) => ({
     const idx = max + 1
     const id = uuid()
     const tpl = readTemplate(repoFiles)
+    const cfg = readConfig(repoFiles)
+    const author = formatAuthor(cfg.profile.name, cfg.profile.email) || ""
     const file: Localization = {
       id, number: parent.number, fileName: `localization-${idx}.md`, parentId: parent.id,
-      frontmatter: { ...parent.frontmatter }, body: tpl.body, attachments: [],
+      frontmatter: { ...parent.frontmatter, author }, body: tpl.body, attachments: [],
       createdAt: Date.now(), updatedAt: Date.now(), dirty: true, synced: false,
     }
     set((s) => ({

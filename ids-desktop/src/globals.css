@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *, .darcula *));
 
 @theme inline {
   --color-background: var(--background);
@@ -110,6 +110,42 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Darcula — мягкая тёмная тема (серее .dark, как IntelliJ IDEA Darcula).
+   Не чисто чёрная (#2b2b2b вместо #0a0a0a), текст #b0b0b0 вместо #fafafa. */
+.darcula {
+  --background: #2b2b2b;
+  --foreground: #b0b0b0;
+  --card: #313335;
+  --card-foreground: #b0b0b0;
+  --popover: #313335;
+  --popover-foreground: #b0b0b0;
+  --primary: #4e5c61;
+  --primary-foreground: #e0e0e0;
+  --secondary: #3c3c3c;
+  --secondary-foreground: #b0b0b0;
+  --muted: #383838;
+  --muted-foreground: #8a8a8a;
+  --accent: #3c3c3c;
+  --accent-foreground: #b0b0b0;
+  --destructive: #b33a3a;
+  --border: #404040;
+  --input: #404040;
+  --ring: #565656;
+  --chart-1: #6a8c5b;
+  --chart-2: #6a8aab;
+  --chart-3: #d7a04a;
+  --chart-4: #a86ab8;
+  --chart-5: #b85a5a;
+  --sidebar: #313335;
+  --sidebar-foreground: #b0b0b0;
+  --sidebar-primary: #4e5c61;
+  --sidebar-primary-foreground: #e0e0e0;
+  --sidebar-accent: #3c3c3c;
+  --sidebar-accent-foreground: #b0b0b0;
+  --sidebar-border: #404040;
+  --sidebar-ring: #565656;
 }
 
 @layer base {
