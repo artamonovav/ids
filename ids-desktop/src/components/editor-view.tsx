@@ -262,7 +262,7 @@ export function EditorView() {
       })
       return
     }
-    clarify()
+    clarify(activeFile.id)
     toast({ title: "Создано уточнение локализации", description: "Шаблон заполнен из исходного файла." })
   }
 

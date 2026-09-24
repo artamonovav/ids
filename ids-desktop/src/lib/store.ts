@@ -156,7 +156,7 @@ interface State {
   patchFile: (id: string, patch: Partial<Localization>) => Promise<void>
   removeFile: (id: string) => Promise<void>
   removeFolderDrafts: (number: string) => Promise<void>
-  clarify: () => Promise<string | null>
+  clarify: (parentId?: string) => Promise<string | null>
   writeDictionary: (name: DictName, values: string[]) => Promise<void>
   writeTemplateFile: (content: string) => Promise<void>
   writeConfig: (config: UserConfig) => Promise<void>
@@ -357,10 +357,11 @@ export const useStore = create<State>()((set, get) => ({
     })
   },
 
-  clarify: async () => {
+  clarify: async (parentId?: string) => {
     const { base, editing, repoFiles } = get()
-    if (!editing.number || !editing.fileId) return null
-    const parent = get().files.find((f) => f.id === editing.fileId)
+    const pid = parentId || editing.fileId
+    if (!pid) return null
+    const parent = get().files.find((f) => f.id === pid)
     if (!parent) return null
     const siblings = get().files.filter((f) => f.number === parent.number)
     let max = 1
@@ -381,6 +382,7 @@ export const useStore = create<State>()((set, get) => ({
     set((s) => ({
       files: [...s.files, file],
       editing: { number: parent.number, fileId: id },
+      view: "editor",
       syncStatus: "yellow",
     }))
     await writeLoc(base, file)

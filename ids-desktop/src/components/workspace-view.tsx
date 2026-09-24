@@ -171,8 +171,9 @@ export function WorkspaceView() {
     visibleFolders.length > 0 || (showTemps && filteredTemps.length > 0)
 
   function handleClarify(number: string) {
-    openFolder(number)
-    clarify()
+    const main = useStore.getState().files.find((f) => f.number === number && f.fileName === "localization.md")
+      ?? useStore.getState().files.find((f) => f.number === number)
+    if (main) clarify(main.id)
   }
 
   async function handleSync() {
