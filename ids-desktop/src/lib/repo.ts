@@ -39,7 +39,7 @@ export interface UserConfig {
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
   profile: { name: "", email: "" },
-  recentLimit: 5,
+  recentLimit: 3,
 }
 
 function cfgQuote(s: string): string {
@@ -83,7 +83,7 @@ export function readConfig(repoFiles: Record<string, string> | undefined): UserC
     const key = m[2]
     const val = m[3]
     if (key === "recentLimit") {
-      cfg.recentLimit = parseInt(cfgUnquote(val), 10) || 5
+      cfg.recentLimit = parseInt(cfgUnquote(val), 10) || 3
     } else {
       ;(cfg.profile as Record<string, string>)[key] = cfgUnquote(val)
     }

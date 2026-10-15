@@ -175,7 +175,7 @@ export const useStore = create<State>()((set, get) => ({
   syncError: null,
   syncing: false,
   lastCommitMessage: null,
-  recentLimit: 5,
+  recentLimit: 3,
 
   init: async () => {
     try {

@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { Type } from "@/lib/types"
 
-const PAGE = 50
+const PAGE = 10
 
 const TYPE_BADGE: Record<string, "destructive" | "secondary" | "outline"> = {
   Дефект: "destructive",

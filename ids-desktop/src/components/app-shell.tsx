@@ -130,7 +130,7 @@ export function AppShell() {
         {view === "settings" && <SettingsView />}
       </main>
 
-      <footer className="mt-auto border-t bg-background">
+      <footer className="sticky bottom-0 z-40 border-t bg-background">
         <div className="mx-auto flex h-10 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
           <StatusPill />
           {version && <span className="text-xs text-muted-foreground">v{version}</span>}

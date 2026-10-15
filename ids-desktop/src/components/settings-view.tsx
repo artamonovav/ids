@@ -226,7 +226,7 @@ export function SettingsView() {
               max={100}
               className="h-8 w-24 text-sm"
               value={recentLimit}
-              onChange={(e) => setRecentLimit(Math.max(1, parseInt(e.target.value, 10) || 5))}
+              onChange={(e) => setRecentLimit(Math.max(1, parseInt(e.target.value, 10) || 3))}
             />
           </div>
           <p className="text-[11px] text-muted-foreground">
