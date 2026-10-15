@@ -84,7 +84,7 @@ export function FrontmatterForm({
   )
   const removeProduct = (p: string) =>
     onChange({ product: value.product.filter((x) => x !== p) })
-  const productSuggestions = dictionaries.product.filter((p) => !value.product.includes(p)).slice(0, 6)
+  const productSuggestions = dictionaries.product.filter((p) => !value.product.includes(p)).sort((a, b) => a.localeCompare(b, "ru"))
 
   const addRelated = (raw: string) => {
     const v = raw.trim()
@@ -199,7 +199,7 @@ export function FrontmatterForm({
           Продукт
         </Label>
         {value.product.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
             {value.product.map((p) => (
               <Badge key={p} variant="secondary" className="gap-1 py-0 text-xs">
                 <span>{p}</span>
@@ -231,7 +231,7 @@ export function FrontmatterForm({
           className="h-8 text-sm"
         />
         {productSuggestions.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
             {productSuggestions.map((p) => (
               <Badge
                 key={p}
@@ -371,7 +371,7 @@ export function FrontmatterForm({
           Связанные задачи (related)
         </Label>
         {value.related.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
             {value.related.map((r) => (
               <Badge key={r} variant="secondary" className="gap-1 py-0 text-xs">
                 <span>{r}</span>

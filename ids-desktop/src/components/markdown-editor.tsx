@@ -42,7 +42,7 @@ interface MarkdownEditorProps {
 type Mode = 'split' | 'source' | 'preview'
 
 const TEXTAREA_CLASS =
-  'font-mono text-sm w-full min-h-[55vh] resize-y rounded-md border bg-transparent p-3 outline-none focus-visible:ring-[3px]'
+  'font-mono text-sm w-full min-h-[55vh] resize-y rounded-md border bg-transparent p-3 outline-none focus-visible:ring-[3px] [-webkit-font-smoothing:antialiased] [text-rendering:optimizeSpeed]'
 
 interface HastPoint {
   line: number
