@@ -1,8 +1,9 @@
 # IDS — Issue Documentation System
 
 Графическое редактирование локализаций проблем по единому шаблону
-(Markdown + YAML frontmatter). Рабочее приложение — Next.js 16 + TypeScript +
-shadcn/ui; данные хранятся в `localStorage` (в десктоп-цели Tauri — в Git).
+(Markdown + YAML frontmatter). Десктоп-приложение на **Tauri 2**
+(React + TypeScript + shadcn/ui во фронтенде, Rust-бэкенд). Данные хранятся
+в папке проекта, синхронизация — через Git.
 
 - Форма frontmatter (13 полей, настраиваемые справочники из `.dictionary/*.yaml`).
 - Редактор тела Markdown: 3 режима (совмещённо / источник / просмотр).
@@ -13,204 +14,132 @@ shadcn/ui; данные хранятся в `localStorage` (в десктоп-ц
   переносятся в базу знаний и помечаются к синхронизации.
 - Тема (light/dark), sticky-футер со статусом синхронизации, русский UI.
 
----
-
-## 1. Быстрый старт через Docker (без установки Node/Bun/Rust)
-
-Самый простой путь — всё внутри контейнеров.
-
-### 1.1 Разработка с hot-reload
-```bash
-docker compose up dev
-```
-Откройте `http://localhost:3000`. Исходники примонтированы — изменения
-пересобираются на лету.
-
-### 1.2 Production-сборка и запуск
-```bash
-docker compose up app --build
-```
-Откройте `http://localhost:3000`. Это та же сборка, что пойдёт в прод.
-
-> `dev` и `app` оба слушают порт 3000 — запускайте что-то одно.
+Поддерживаемые платформы: **Linux**, **Windows**, **macOS**.
 
 ---
 
-## 2. Локально без Docker (нужен Node 20 и/или Bun)
+## 1. Сборка и запуск
 
-### 2.1 Установка Node.js 20 + Bun
+Весь код десктопа лежит в [`ids-desktop/`](ids-desktop). Команды ниже
+выполняются из этой папки.
 
-**Linux (Ubuntu 22.04 / Debian):**
+### 1.1 Требования
+
+| Что | Зачем |
+|---|---|
+| Node.js 20+ или Bun 1.x | фронтенд, `bun install` |
+| Rust (stable, через rustup) | бэкенд Tauri |
+| Системные библиотеки Tauri (см. ниже) | WebView и системные зависимости |
+| Git (в `PATH`) | синхронизация репозитория |
+
+**Linux (Ubuntu 22.04 / 24.04, Mint):**
 ```bash
-sudo apt update && sudo apt install -y curl git ca-certificates
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+sudo apt install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
+  libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev \
+  build-essential curl wget file pkg-config
 curl -fsSL https://bun.sh/install | bash
-source ~/.bashrc
-node -v && bun -v
-```
-
-**macOS:**
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install node@20 bun
-```
-
-**Windows (PowerShell):**
-```powershell
-# Установить Node 20 LTS: https://nodejs.org (или winget install OpenJS.NodeJS.LTS)
-npm install -g bun
-node -v; bun -v
-```
-
-### 2.2 Установка зависимостей и запуск
-```bash
-bun install
-```
-
-Разработка:
-```bash
-bun run dev          # http://localhost:3000, лог в dev.log
-```
-
-Production-сборка и запуск:
-```bash
-bun run lint         # проверка кода (0 ошибок)
-bun run build        # standalone-сборка в .next/standalone
-bun run start        # запуск собранного сервера
-```
-
-Слушать на всех интерфейсах/другом порту:
-```bash
-PORT=3000 HOSTNAME=0.0.0.0 bun run start
-```
-
-> База данных не требуется: локализации хранятся в `localStorage`.
-> Prisma/SQLite из шаблона этим приложением не используются.
-
----
-
-## 3. Десктоп-приложение (Tauri, опционально)
-
-Десктоп-обёртка (один исполняемый файл) собирается через **Tauri 2** и требует
-**Rust**. Если на хосте Rust поставить нельзя (корпоративные политики) —
-используйте готовый Docker-образ `docker/tauri.Dockerfile`: **Rust уже внутри**.
-
-### 3.1 Сборка десктопа под ключ (в Docker, без Rust на хосте)
-
-Полный проект Tauri лежит в [`ids-desktop/`](ids-desktop) — **ничего допиливать не нужно**:
-- фронтенд (Vite+React, `main.tsx`) + `store.tauri.ts` (полный, все действия через `invoke`);
-- Rust-бэкенд `src-tauri/` (`commands.rs`: `get_base`, `read_localizations`, `read_repo_files`,
-  `write_file`, `delete_file`, `git_clone`/`git_pull`/`git_sync`/`git_branches` на `std::fs` + системный `git`, без `git2`);
-- `build.sh` — **turnkey**: переносит `./src` IDS в `ids-desktop/src/`, генерирует иконки из `logo.svg`, ставит deps, собирает `tauri build`.
-
-Команды бэкенда используют `std::fs` (файлы) и системный `git` (CLI); SSH-ключ — через `GIT_SSH_COMMAND`.
-
-#### Запуск (одна команда в Docker)
-```bash
-# 1. Запускаем оболочку с Rust+webkit+node+bun (Rust уже ВНУТРИ — на хост не нужен):
-docker compose --profile tauri run --rm tauri
-
-# 2. Внутри контейнера — turnkey-сборка (перенос ./src + иконки + deps + tauri build):
-cd ids-desktop && bash build.sh
-```
-Артефакты: `ids-desktop/src-tauri/target/release/bundle/{debian/*.deb, appimage/*.AppImage}`.
-Установите `.deb`/`.AppImage` или запустите `./ids-desktop/src-tauri/target/release/ids-desktop`.
-
-> `build.sh` копирует фронтенд из `../src` (проброшен в контейнер), генерирует иконки
-> из `../public/logo.svg` (`rsvg-convert` → `tauri icon`), и собирает релиз. Кэш Rust
-> (`tauri_target`, `cargo_cache`) — в отдельных томах, повторная сборка быстрее.
-
-#### Отладка (с окном)
-```bash
-docker compose --profile tauri run --rm tauri
-cd ids-desktop && bash build.sh   # один раз — поставит deps + иконки
-bun x tauri dev                   # hot-reload, откроется окно приложения
-```
-
-> **Важно:** проект собирался в среде без Rust (песочница), поэтому компиляция Rust
-> здесь не проверена. Если `tauri build` упадёт с ошибкой — пришлите вывод, поправлю.
-
-### 3.2 Системные зависимости Tauri (если собирать на хосте, а не в Docker)
-```bash
-sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
-  libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-### 3.3 Ограничения кросс-компиляции
-Tauri **нельзя** кросскомпилировать между ОС из Linux-контейнера:
-- **Linux** `.deb`/`.AppImage` — собирается в Docker (раздел 3.1).
-- **Windows** `.msi`/`.exe` — собирайте на Windows (Node + Rust + WebView2)
-  или через GitHub Actions на `windows-latest`.
-- **macOS** `.app`/`.dmg` — собирайте на macOS (Xcode CLT + Rust)
-  или через GitHub Actions на `macos-latest`.
+**macOS:** Xcode Command Line Tools (`xcode-select --install`), затем
+`brew install bun` и rustup (`curl ... sh.rustup.rs | sh`).
 
-Для кроссплатформенной сборки бинарников рекомендован CI (GitHub Actions matrix:
-`ubuntu-latest`, `windows-latest`, `macos-latest`) — там Rust предустановлен.
+**Windows:** Visual Studio Build Tools (C++), WebView2 (есть в Windows 11),
+Git for Windows, затем `npm install -g bun` и rustup
+(`winget install Rustlang.Rustup`).
 
-### 3.4 Очистка после сборки
+### 1.2 Разработка
+
+```bash
+cd ids-desktop
+bun install
+bun x tauri dev        # откроется окно приложения, hot-reload фронтенда
+```
+
+### 1.3 Сборка установщиков
+
+```bash
+cd ids-desktop
+bash build.sh         # bun install + иконки + tauri build
+```
+
+Артефакты:
+
+| ОС | Файлы |
+|---|---|
+| Linux | `src-tauri/target/release/bundle/{deb,appimage}/` |
+| Windows | `src-tauri/target/release/bundle/{msi,nsis}/` |
+| macOS | `src-tauri/target/release/bundle/{macos,dmg}/` |
+
+Кросс-компиляция между ОС не поддерживается: Tauri требует нативный Rust и
+системный WebView для каждой платформы. Для всех трёх платформ используйте CI
+(см. раздел 5).
+
+### 1.4 Сборка в Docker (Linux, без Rust на хосте)
+
+```bash
+docker compose --profile tauri run --rm tauri
+# внутри контейнера:
+cd ids-desktop && bash build.sh
+```
+
+Образ `docker/tauri.Dockerfile` содержит Rust, Bun и библиотеки WebKitGTK.
+Кэш Rust хранится в томах `tauri_target` и `cargo_cache`.
+
+### 1.5 Очистка после сборки
+
 ```bash
 bash clean.sh --dry-run      # показать что найдёт, не удалять
-bash clean.sh                # удалить всё кроме Rust target/
+bash clean.sh                # удалить артефакты кроме Rust target/
 bash clean.sh --deep         # включая Rust target/ (~ГБ, долго пересобирать)
 bash clean.sh --help         # справка
 ```
----
-
-## 4. Сборка под все платформы (шпаргалка)
-
-| Цель | Платформа | Способ |
-|---|---|---|
-| Веб (prod) | любая | `docker compose up app --build` или `bun run build && bun run start` |
-| Веб (dev) | любая | `docker compose up dev` или `bun run dev` |
-| Desktop Linux | Linux | `docker compose --profile tauri run --rm tauri` → `tauri build` |
-| Desktop Windows | Windows | на Windows: `npm create tauri-app` + `tauri build` |
-| Desktop macOS | macOS | на macOS: `npm create tauri-app` + `tauri build` |
 
 ---
 
-## 5. Структура проекта
+## 2. Структура проекта
 
 ```
-src/
-  lib/
-    types.ts          доменные типы
-    frontmatter.ts    YAML-сериализатор (порядок полей + комментарии)
-    template.ts       эталонный шаблон (fallback)
-    repo.ts           виртуальная ФС репозитория (.dictionary, _template, .tmp, .gitignore)
-    store.ts          zustand+persist: файлы, папки, синхронизация, настройки
-  components/
-    app-shell.tsx          навигация, sticky-футер, тема
-    workspace-view.tsx     список, поиск, режимы (Последние/Черновики/Все)
-    editor-view.tsx        интегратор: форма + редактор + исходник
-    frontmatter-form.tsx   13 полей, теги, переключатели
-    markdown-editor.tsx    3 режима, тулбар, вставка изображений
-    settings-view.tsx      профиль, репозиторий, справочники, шаблон
-    setup-wizard.tsx       мастер первого запуска
-  app/
-    page.tsx, layout.tsx
+ids-desktop/
+  src/                          React-фронтенд (Vite)
+    main.tsx                    точка входа, ErrorBoundary, загрузка через init()
+    components/                 экраны и UI (app-shell, workspace-view, editor-view, ...)
+      ui/                       shadcn/ui компоненты
+    lib/
+      store.ts                  Zustand store (invoke → Rust)
+      frontmatter.ts            YAML-сериализатор (порядок полей + комментарии)
+      repo.ts                   шаблон, справочники, конфиг репозитория
+      types.ts                  доменные типы
+      template.ts               эталонный шаблон (fallback)
+  src-tauri/
+    src/
+      main.rs                   entry
+      lib.rs                    регистрация команд и плагинов
+      commands.rs               Rust-команды: ФС, git, clipboard
+    tauri.conf.json             имя продукта, bundle targets
+    capabilities/default.json   права Tauri
+  build.sh                      сборка под ключ (install + icons + tauri build)
+  build-icons.sh               logo.svg → иконки приложения
+  vite.config.ts
 docker/
-  tauri.Dockerfile    образ с Rust + webkit2gtk для десктоп-сборки
-Dockerfile            Next.js standalone (мультистадийный)
-docker-compose.yml    dev + app + tauri
+  tauri.Dockerfile              образ для Linux-сборки (Rust + WebKitGTK)
+docker-compose.yml              сервис tauri
+.github/workflows/
+  ci.yml                        сборка фронтенда на push/PR
+  release.yml                   сборка всех платформ по тегу v*
 ```
 
-## 6. Команды (package.json)
-- `bun run dev` — разработка (порт 3000).
-- `bun run build` — standalone-сборка.
-- `bun run start` — запуск собранного.
-- `bun run lint` — ESLint.
+---
 
-## 7. Troubleshooting
-- **Docker dev: не работает hot-reload** — на macOS/Windows добавьте в `docker-compose.yml`
-  среды `WATCHPACK_POLLING=true` (уже включено) или перезапустите `docker compose up dev`.
-- **Порт 3000 занят** — смените маппинг: `ports: ["3001:3000"]`.
-- **`bun install` медленный в Docker** — кэш `bun_cache` уже примонтирован; повторные запуски быстрее.
-- **Tauri: ошибка webkit2gtk** — используйте именно `docker/tauri.Dockerfile` (там deps готовы);
-  на хосте нужен пакет `libwebkit2gtk-4.1-dev`.
-- **Корпоративный прокси** — `docker build --build-arg HTTP_PROXY=...` и
-  `bun config` / `npm config` для реестров.
+## 3. Команды (`ids-desktop/package.json`)
+
+- `bun run dev` — Vite dev-сервер (только фронтенд, без Tauri; команды `invoke` не работают).
+- `bun run build` — сборка фронтенда в `dist/`.
+- `bun x tauri dev` / `bun x tauri build` — полное приложение.
+
+---
+
+## 4. Troubleshooting
 
 ### macOS: «приложение повреждено и его не удалось открыть»
 
@@ -220,12 +149,9 @@ Gatekeeper блокирует **unsigned**-сборки (без Apple Developer-
 
 **Workaround без пересборки** (выполнить в Terminal):
 ```bash
-# Снять quarantine-флаг с приложения (где бы оно ни лежало):
 xattr -cr /Applications/IDS.app
-# После этого — обычный double-click запустит приложение.
 open /Applications/IDS.app
 ```
-`xattr -cr` снимает расширенные атрибуты (включая `com.apple.quarantine`).
 Альтернатива: System Settings → Privacy & Security → «Open Anyway».
 
 **Полный фикс — нотаризация** (нужен Apple Developer Account, $99/год). CI уже
@@ -239,93 +165,55 @@ variables → Actions → New repository secret):
 | `APPLE_PASSWORD` | app-specific password | appleid.apple.com → Sign-In and Security → App-Specific Passwords |
 | `APPLE_TEAM_ID` | Team ID (10 символов) | developer.apple.com → Membership Details |
 
-При следующем пуше тега `v*` CI автоматически подпишет (Developer ID Application)
-и нотаризует `.app`/`.dmg`. Gatekeeper пропустит без «повреждено», ярлык
-«Verified Developer» в Finder. См. `release.yml` — блок `APPLE_*` env в шаге
-`tauri-action` (пустые секреты = unsigned, текущее поведение).
+При следующем пуше тега `v*` CI подпишет (Developer ID Application) и нотаризует
+`.app`/`.dmg`. См. `release.yml` — блок `APPLE_*` env в шаге `tauri-action`
+(пустые секреты = unsigned, текущее поведение).
 
 ### Windows: portable exe — иконка не соответствует logo.svg
 
 Иконки генерируются из `ids-desktop/public/logo.svg` → `source.png` → `tauri icon`
-(все размеры + `.ico`) шагом `build-icons.sh` в CI. Иконка встраивается в `.exe`
-через `tauri_build::build()` в `build.rs` (Windows resource file).
+(все размеры + `.ico`) шагом `build-icons.sh`. Иконка встраивается в `.exe`
+через `tauri_build::build()` в `build.rs`.
 
-Если Explorer показывает **стандартную** иконку вместо вашей — это **Windows icon cache**:
-Windows агрессивно кэширует иконки `.exe` по имени файла. После обновления
-иконки в новом билде Explorer показывает старую (кэшированную).
-
-**Очистка кэша иконок** (в cmd от имени администратора):
+Если Explorer показывает **стандартную** иконку — это **Windows icon cache**.
+Очистка (в cmd от имени администратора):
 ```cmd
 ie4uinit.exe -show
 ```
-Альтернатива: перезапустить Explorer (Диспетчер задач → explorer.exe → Перезапустить)
-или скопировать `IDS.exe` под другим именем (новое имя = нет кэша).
-
-**Проверить что иконка встроена** (без визуальной проверки):
-```cmd
-rcedit IDS.exe --set-icon src-tauri\icons\icon.ico
-```
-(Если `rcedit` сообщает что иконка уже установлена — она встроена корректно.)
+Альтернатива: перезапустить Explorer или скопировать `IDS.exe` под другим именем.
 
 ### CI: «Resource not accessible by integration» при создании релиза
 
-Если `tauri-action` падает с `Error: Resource not accessible by integration`
-при попытке создать GitHub Release — `GITHUB_TOKEN` не имеет прав на запись.
-Для новых репозиториев GitHub по умолчанию выставляет **read-only** workflow
-permissions, и `permissions: contents: write` в workflow НЕ помогает (новое
-поведение GitHub с 2023).
+`tauri-action` не может создать GitHub Release — у `GITHUB_TOKEN` нет прав на запись.
+**Фикс** (один раз, в настройках репо): Settings → Actions → General →
+Workflow permissions → **Read and write permissions** → Save. Затем перепушить тег
+или перезапустить workflow.
 
-**Фикс** (один раз, в настройках репо):
-1. Repo **Settings → Actions → General**.
-2. Прокрутить до «Workflow permissions».
-3. Выбрать **«Read and write permissions»** (не «Read repository contents...»).
-4. **Save**.
-5. Перепушить тег (или re-run failed workflow).
+В `release.yml` есть шаг **«Ensure draft release exists»** — он падает с понятной
+ошибкой **до** долгой сборки Rust. Если видите его ошибку — это та же проблема.
 
-В `release.yml` есть шаг **«Ensure draft release exists»** — он fail-fast:
-падает с понятной ошибкой **до** долгой сборки Rust, а не после 3+ минут.
-Если видите его ошибку — это та самая проблема с permissions.
-
-**Альтернатива** (если org-политика запрещает elevate): создать PAT
-(Personal Access Token, classic, scope `repo`), добавить как secret
-`RELEASE_TOKEN`, и в `release.yml` заменить `GITHUB_TOKEN` → `RELEASE_TOKEN`
-в env шага `tauri-action` и шага «Ensure draft release exists».
+**Альтернатива** (если org-политика запрещает): PAT (classic, scope `repo`) как
+secret `RELEASE_TOKEN` и замена `GITHUB_TOKEN` → `RELEASE_TOKEN` в `release.yml`.
 
 ---
 
-## 8. CI / Автоматизация (GitHub Actions)
+## 5. CI / Автоматизация (GitHub Actions)
 
-В `.github/workflows/` два сценария:
+### 5.1 `ci.yml` — проверка фронтенда
+Запускается на push в `main`/`master` и на PR. Ставит Bun, делает
+`bun install --frozen-lockfile` и `bun run build` в `ids-desktop/`. Rust не нужен.
 
-### 8.1 `ci.yml` — проверка веб-приложения (lint + build)
-Запускается на каждый push в `main`/`master` и на PR. Ставит Bun, делает
-`bun install --frozen-lockfile`, `bun run lint`, `bun run build`. Rust не нужен.
-Зелёная галка = приложение собирается и проходит линт.
-
-### 8.2 `release.yml` — сборка десктоп-бинарников Tauri (Windows / macOS / Linux)
+### 5.2 `release.yml` — сборка бинарников (Windows / macOS / Linux)
 Запускается при создании git-тега вида `v*`. На каждой ОС ставится Rust (на
-Linux — +webkit2gtk-4.1), собирается Tauri через `tauri-apps/tauri-action`, и
-артефакты (`.msi`/`.exe`, `.app`/`.dmg`, `.deb`/`.AppImage`) прикладываются к
-GitHub Release как черновик.
+Linux — +WebKitGTK), собирается Tauri через `tauri-apps/tauri-action`, и
+артефакты (`.msi`/`.exe`, `.app`/`.dmg`, `.deb`/`.AppImage`, portable `.zip` для
+Windows) прикладываются к GitHub Release как черновик.
 
-**Важно:** сборка запускается только при наличии `src-tauri/tauri.conf.json`
-(проверка отдельным шагом после checkout — `hashFiles()` не работает на уровне
-`if:` у job). Пока Tauri-проект не создан — шаги сборки пропускаются
-(уведомление в логе), CI остаётся зелёным. Как создать `src-tauri` — см. раздел 3.1.
-
-### 8.3 Как пользоваться
+### 5.3 Как выпустить релиз
 ```bash
-# 1. Запушить репозиторий на GitHub:
-git remote add origin git@github.com:<org>/ids.git
-git push -u origin main        # запустится ci.yml (lint + build)
-
-# 2. (опционально) Создать src-tauri для десктопа — см. раздел 3.1, закоммитить.
-
-# 3. Выпустить релиз десктоп-бинарников:
-git tag v0.1.0
-git push origin v0.1.0         # запустится release.yml → Release с артефактами
+git tag v0.2.0
+git push origin v0.2.0         # запустится release.yml → Release с артефактами
 ```
 
 Если `bun.lock` меняется — коммитьте его, иначе `--frozen-lockfile` в CI упадёт
 (так и задумано — воспроизводимость сборок).
-

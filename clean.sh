@@ -7,7 +7,7 @@
 #   --help      эта справка
 #
 # Безопасно: удаляет ТОЛЬКО известные build-артефакты и кэш. НЕ трогает:
-#   .git/, src/, *.ts/tsx, package.json, tsconfig.json, .github/, docker/, configs.
+#   .git/, ids-desktop/src/, *.ts/tsx, package.json, tsconfig.json, .github/, docker/, configs.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -25,11 +25,7 @@ done
 # Список путей для очистки (относительно корня репо).
 # Формат: "путь|описание|требует_--deep"
 TARGETS=(
-  ".next|Next.js build output (веб-версия)|0"
-  "out|Next.js static export|0"
-  "dist|Vite build output (ids-desktop)|0"
   "ids-desktop/dist|Vite build output (Tauri)|0"
-  "node_modules|deps веб-версии (ставятся bun install)|0"
   "ids-desktop/node_modules|deps Tauri-фронта (bun install)|0"
   "ids-desktop/artifacts|копии артефактов сборки|0"
   "ids-desktop/src-tauri/gen|сгенерённые Tauri-файлы|0"
@@ -91,4 +87,3 @@ fi
 echo ""
 echo "Для пересборки после очистки:"
 echo "  cd ids-desktop && bun install && bash build.sh   # Tauri desktop"
-echo "  bun install && bun run build                     # веб-версия"

@@ -8,16 +8,19 @@
 # Обзор
 
 IDS — графическое приложение для заполнения локализаций проблем по единому
-шаблону (Markdown + YAML frontmatter). Два delivery-таргета из одной кодовой базы:
+шаблону (Markdown + YAML frontmatter). Единственный delivery-таргет — десктоп
+на Tauri 2 (Linux, Windows, macOS), код в `ids-desktop/`:
 
-| Таргет | Фреймворк | Данные | Где |
-|---|---|---|---|
-| **Веб** | Next.js 16 | localStorage (эмуляция ФС) | `src/` |
-| **Десктоп** | Tauri 2 | реальная ФС + Git | `ids-desktop/` |
+| Слой | Технология | Где |
+|---|---|---|
+| Фронтенд | Vite + React 19 + Zustand | `ids-desktop/src/` |
+| Бэкенд | Rust (Tauri 2): реальная ФС + системный Git | `ids-desktop/src-tauri/` |
 
-Фронтенд (React-компоненты) — **общий**. Бэкенд разный:
-- Веб: localStorage (через `zustand/persist`)
-- Десктоп: Rust-команды (`invoke` → `std::fs` + системный `git`)
+Фронтенд (React-компоненты) и бэкенд разделены IPC-мостом `invoke`:
+Rust-команды (`std::fs` + системный `git`) вызываются из Zustand store.
+
+> Веб-версия (Next.js + localStorage) удалена: она не использовалась,
+> дублировала фронтенд и не поддерживала синхронизацию через Git.
 
 ---
 
@@ -25,16 +28,7 @@ IDS — графическое приложение для заполнения 
 
 ```mermaid
 graph TB
-    subgraph "Веб-версия (Next.js 16)"
-        W_BROWSER[Браузер]
-        W_APP[Next.js App<br/>App Router]
-        W_STORE[store.ts<br/>Zustand + persist]
-        W_LS[(localStorage)]
-        W_APP --> W_STORE
-        W_STORE --> W_LS
-    end
-
-    subgraph "Десктоп-версия (Tauri 2)"
+    subgraph "Десктоп-приложение (Tauri 2)"
         D_WEBVIEW[WebView<br/>WebKit2GTK / WebView2 / WKWebView]
         D_FRONT[Vite + React<br/>ids-desktop/src/]
         D_STORE[store.ts<br/>Zustand]
@@ -45,15 +39,10 @@ graph TB
         D_STORE <-->|invoke| D_RUST
         D_RUST --> D_FS
     end
-
-    SHARED[Shared components<br/>editor-view, markdown-editor,<br/>frontmatter-form, etc.]
-    D_FRONT --> SHARED
-    W_APP --> SHARED
 ```
 
-**Ключевое:** React-компоненты — общие (в `src/components/`).
-Store — разный: веб-версия использует `persist` (localStorage),
-Tauri-версия — `invoke()` (Rust IPC). Компоненты не знают, какой store под ними.
+**Ключевое:** компоненты (`ids-desktop/src/components/`) не знают о хранении —
+они вызывают действия store, а store обращается к Rust через `invoke()`.
 
 ---
 
@@ -177,16 +166,16 @@ interface State {
 }
 ```
 
-### Store: веб vs десктоп
+### Store: действия и их реализация
 
-| Аспект | Веб (store.ts) | Десктоп (store.ts) |
-|---|---|---|
-| Хранилище | `zustand/persist` → localStorage | invoke() → Rust → ФС |
-| `init()` | читает из persisted state | `invoke("read_localizations")` |
-| `upsertFile()` | обновляет state + persist | `invoke("write_file")` + state |
-| `sync()` | no-op (нет Git) | `invoke("git_sync")` (pull+add+commit+push) |
-| UUID | `crypto.randomUUID()` | polyfill (WebKitGTK) |
-| Attachments | в state (data URLs) | на диске + lazy load |
+| Аспект | Реализация (store.ts) |
+|---|---|
+| Хранилище | invoke() → Rust → ФС |
+| `init()` | `invoke("read_localizations")`, `invoke("read_repo_files")` |
+| `upsertFile()` | `invoke("write_file")` + state |
+| `sync()` | `invoke("git_sync")` (pull+add+commit+push) |
+| UUID | polyfill (WebKitGTK) |
+| Attachments | на диске + lazy load |
 
 ---
 
@@ -636,30 +625,6 @@ flowchart TB
 
 # Deployment
 
-## Веб-версия (Next.js standalone)
-
-```mermaid
-graph LR
-    SRC[Source<br/>src/ + package.json]
-    BUILD[bun run build<br/>.next/standalone]
-    DOCKER[Dockerfile<br/>multi-stage]
-    IMG[Docker image<br/>node:slim + standalone]
-    RUN[Container<br/>PORT=3000]
-
-    SRC --> BUILD
-    BUILD --> DOCKER
-    DOCKER --> IMG
-    IMG --> RUN
-```
-
-```bash
-# Production
-docker compose up app --build    # http://localhost:3000
-
-# Dev (hot-reload)
-docker compose up dev            # http://localhost:3000
-```
-
 ## Десктоп-версия (Tauri)
 
 ```mermaid
@@ -758,33 +723,7 @@ Polyfill: проверка `typeof crypto.randomUUID === 'function'`, fallback �
 
 shadcn/ui тема использует `oklch()` (CSS Color Level 4). WebKit2GTK ~2.38 не поддерживает → все 62 color variables invalid → transparent → белый экран. Фикс: oklch → hex/rgba конверсия.
 
-## 3. PostCSS isolation
-
-```mermaid
-graph TB
-    PARENT[repo/postcss.config.mjs<br/>Next.js: plugins: ["@tailwindcss/postcss"]]
-    WALK[postcss-load-config<br/>идёт ВВЕРХ по дереву]
-    IDS[ids-desktop/]
-    FOUND[находит родительский<br/>string format invalid для Vite]
-    CRASH[Invalid PostCSS Plugin<br/>build fails]
-
-    PARENT --> WALK
-    WALK --> IDS
-    IDS --> FOUND
-    FOUND --> CRASH
-
-    FIX1[ids-desktop/postcss.config.cjs<br/>plugins: [] (stop search)]
-    FIX2[vite.config.ts<br/>css.postcss: { plugins: [] }]
-
-    IDS -.->|fix r40| FIX1
-    IDS -.->|fix r40| FIX2
-```
-
-Два уровня изоляции:
-1. `ids-desktop/postcss.config.cjs` — локальный пустой конфиг, `cosmiconfig` находит его первым.
-2. `vite.config.ts` `css.postcss: { plugins: [] }` — inline, Vite не ищет файл.
-
-## 4. CRLF → LF (Windows frontmatter)
+## 3. CRLF → LF (Windows frontmatter)
 
 ```mermaid
 graph LR
@@ -805,7 +744,7 @@ graph LR
 
 Windows git конвертирует LF → CRLF при checkout. Regex на `\n` не матчит `---\r\n` → парсинг ломается. Фикс: нормализация перед regex + `serializeDocument` нормализует body + `.gitattributes` (`eol=lf`).
 
-## 5. Ctrl+V картинок на Linux (WebKit2GTK)
+## 4. Ctrl+V картинок на Linux (WebKit2GTK)
 
 ```mermaid
 graph TB
@@ -835,32 +774,15 @@ WebKit2GTK на Linux не экспонирует image как `File` item в `c
 
 ```
 ids/
-├── src/                          # Веб-версия (Next.js 16)
-│   ├── app/                      # App Router (page, layout, api)
-│   ├── components/               # Общие React-компоненты
-│   │   ├── app-shell.tsx         #   навигация + sticky-футер
-│   │   ├── workspace-view.tsx    #   список локализаций
-│   │   ├── editor-view.tsx       #   форма + редактор + исходник
-│   │   ├── frontmatter-form.tsx  #   13 полей
-│   │   ├── markdown-editor.tsx  #   3 режима, paste/drop
-│   │   ├── settings-view.tsx    #   профиль, справочники
-│   │   ├── setup-wizard.tsx      #   первый запуск
-│   │   └── ui/                   #   shadcn/ui компоненты
-│   ├── lib/
-│   │   ├── types.ts              #   Frontmatter, Localization, Attachment
-│   │   ├── frontmatter.ts        #   кастомный YAML-сериализатор
-│   │   ├── store.ts              #   Zustand store (localStorage)
-│   │   ├── repo.ts               #   виртуальная ФС + dictionaries
-│   │   └── template.ts           #   эталонный шаблон
-│   └── hooks/                    #   use-toast, use-mobile
-│
-├── ids-desktop/                  # Десктоп (Tauri 2) — self-contained
+├── ids-desktop/                  # Десктоп (Tauri 2) — единственный таргет
 │   ├── src/
 │   │   ├── main.tsx              #   ErrorBoundary + Root
-│   │   ├── components/           #   копия src/components/ (отредактированная)
+│   │   ├── components/           #   app-shell, workspace-view, editor-view,
+│   │   │   └── ui/               #   frontmatter-form, markdown-editor, settings-view,
+│   │   │                         #   setup-wizard; ui/ — shadcn/ui
 │   │   └── lib/
 │   │       ├── store.ts          #   Zustand store (invoke → Rust)
-│   │       └── ...               #   frontmatter, repo, types (копии)
+│   │       └── ...               #   frontmatter, repo, types, template
 │   ├── src-tauri/
 │   │   ├── src/
 │   │   │   ├── main.rs           #   entry
@@ -872,17 +794,16 @@ ids/
 │   │       └── default.json      #   permissions
 │   ├── build.sh                  #   turnkey: install + icons + tauri build
 │   ├── build-icons.sh            #   logo.svg → tauri icons
-│   ├── vite.config.ts            #   Vite + @tailwindcss/vite + postcss isolation
+│   ├── vite.config.ts            #   Vite + @tailwindcss/vite
 │   └── package.json
 │
 ├── .github/workflows/
-│   ├── ci.yml                    #   web: lint + build (push/PR)
+│   ├── ci.yml                    #   frontend: bun run build (push/PR)
 │   └── release.yml               #   Tauri matrix: ubuntu/windows/macos (tag v*)
 │
 ├── docker/
 │   └── tauri.Dockerfile          #   Rust + webkit2gtk + bun
-├── Dockerfile                    #   Next.js standalone (multi-stage)
-├── docker-compose.yml           #   dev + app + tauri
+├── docker-compose.yml            #   сервис tauri
 ├── clean.sh                      #   очистка build-артефактов
 ├── .gitattributes                #   eol=lf (превент CRLF на Windows)
 └── README.md

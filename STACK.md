@@ -8,12 +8,11 @@
 
 ```
 IDS
-├── Веб-версия (Next.js 16)     ← браузер, данные в localStorage
 ├── Десктоп-версия (Tauri 2)    ← нативное окно, данные в реальной ФС + Git
-│   ├── Фронтенд: Vite + React  (тот же код, что и веб)
+│   ├── Фронтенд: Vite + React
 │   └── Бэкенд:   Rust          (файловая система, git CLI)
 ├── CI/CD: GitHub Actions        ← сборка под Linux/Windows/macOS
-└── Docker                       ← изолированная среда сборки
+└── Docker                       ← изолированная среда сборки Linux-пакетов
 ```
 
 ---
@@ -25,13 +24,11 @@ IDS
 | **Язык (фронт)** | TypeScript | 5 | Везде | Java (но структурная типизация) |
 | **Язык (бэк)** | Rust | 2021 ed. | Tauri-бэкенд | Java/C++ (но ownership model) |
 | **UI-библиотека** | React | 19 | Везде | Swing/JavaFX (декларативный) |
-| **Фреймворк (веб)** | Next.js | 16 | Веб-версия | Spring Boot |
 | **Сборщик (десктоп)** | Vite | 6 | Tauri-фронтенд | Maven/Gradle (для фронта) |
 | **Десктоп-фреймворк** | Tauri | 2 | ids-desktop | Electron (но на Rust) |
 | **CSS-фреймворк** | Tailwind CSS | 4 | Везде | — (нет аналога в Java) |
 | **UI-компоненты** | shadcn/ui | New York | Везде | — (готовые виджеты) |
 | **State management** | Zustand | 5 | Везде | Singleton pattern |
-| **Маршрутизация** | App Router | — | Веб-версия | Spring MVC routes |
 | **Темы** | next-themes | 0.4 | Везде | — |
 | **Markdown** | react-markdown | 10 | Редактор тела | — |
 | **Иконки** | lucide-react | — | Везде | — |
@@ -39,7 +36,7 @@ IDS
 | **Base64** | base64 crate | 0.22 | Вложения | java.util.Base64 |
 | **Package manager** | Bun | 1.x | Фронтенд | Maven (но быстрее) |
 | **CI/CD** | GitHub Actions | — | release.yml, ci.yml | Jenkins/GitLab CI |
-| **Контейнеризация** | Docker | — | docker-compose, Dockerfile | — |
+| **Контейнеризация** | Docker | — | docker-compose (сборка Linux) | — |
 | **VCS** | Git | — | Везде | Git |
 
 ### Дополнительные библиотеки (из package.json)
@@ -186,7 +183,6 @@ function EditorView() {
 
 #### 6. React 19 особенности:
 - `use()` — новый хук для промиссов/context
-- Server Components (в Next.js)
 - `ref` как обычный prop (без `forwardRef`)
 
 ### Ресурсы:
@@ -248,22 +244,7 @@ function EditorView() {
 
 ## Фаза 4: Сборщики и фреймворки
 
-### Вариант A: Next.js 16 (веб-версия)
-
-**Зачем:** full-stack React-фреймворк (SSR, routing, API routes).
-
-**Java-аналогия:** Next.js = Spring Boot для React. Даёт структуру, маршрутизацию, server-side.
-
-#### Концепции:
-- **App Router** (`src/app/`) — файловая маршрутизация
-  - `page.tsx` = страница, `layout.tsx` = обёртка, `loading.tsx` = Suspense
-- **Server Components** (по умолчанию) — рендерятся на сервере
-- **Client Components** (`'use client'`) — интерактивные, на клиенте
-- **API Routes** (`src/app/api/route.ts`) — бэкенд-эндпоинты
-- **Metadata** — SEO через экспорт `metadata` из page
-- **Turbopack** — новый бандлер (замена Webpack)
-
-### Вариант B: Vite 6 (Tauri-фронтенд)
+### Vite 6 (фронтенд Tauri)
 
 **Зачем:** быстрый dev-сервер и сборщик для SPA.
 
@@ -286,16 +267,13 @@ import path from "node:path"
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
-  css: { postcss: { plugins: [] } },  // изоляция от родительского Next.js postcss
   server: { port: 1420, strictPort: true },
   build: { outDir: "dist", emptyOutDir: true },
 })
 ```
 
 ### Ресурсы:
-- **[Next.js docs](https://nextjs.org/docs)** — официальный, отличный
 - **[Vite guide](https://vitejs.dev/guide/)** — короткий и понятный
-- **[Lee Robinson YouTube](https://www.youtube.com/@leerob)** — Next.js контент
 
 ### Время: ~2-3 недели
 
@@ -335,7 +313,6 @@ function MyComponent() {
 - **Selectors** `useStore((s) => s.field)` — подписка на конкретное поле (оптимизация)
 - **`set(partial)`** — обновление (иммутабельное, как `setState`)
 - **`get()`** — чтение без подписки
-- **`persist`** middleware — сохранение в localStorage (как сериализация в Java)
 
 ### Ресурсы:
 - **[Zustand GitHub](https://github.com/pmndrs/zustand)** — короткий README с примерами
@@ -575,8 +552,7 @@ jobs:
 - **Что:** контейнеризация
 - **Java-аналог:** нет (JAR — это не контейнер)
 - **Концепты:**
-  - `Dockerfile` (сборка образа)
-  - `docker-compose.yml` (мульти-контейнер)
+  - `docker-compose.yml` (сервис сборки Tauri)
   - Volumes (персистентные данные)
   - `docker build`, `docker run`, `docker compose up`
 - **Ресурс:** [Docker docs](https://docs.docker.com/), [Play with Docker](https://training.play-with-docker.com/)
@@ -592,7 +568,7 @@ jobs:
 | 1-2 | JavaScript + TypeScript | Понимаешь TS-код проекта |
 | 3-5 | React + хуки | Можешь писать UI-компоненты |
 | 6 | Tailwind + CSS | Стилизуешь компоненты |
-| 7-8 | Next.js или Vite | Запускаешь веб-приложение |
+| 7-8 | Vite | Запускаешь фронтенд Tauri |
 | 9 | Zustand | Управляешь состоянием |
 | 10-13 | Rust (Book + Rustlings) | Пишешь простые Rust-программы |
 | 14-15 | Tauri 2 | Собираешь десктоп-приложение |
@@ -711,7 +687,7 @@ const task = { run: () => console.log("run") }  // подходит, даже б
 1. **Сначала**: TypeScript → React (без этого никак)
    - [React.dev Tutorial](https://react.dev/learn) — за 1 день соберёшь первое приложение
 2. **Потом**: CSS/Tailwind (чтобы UI выглядел)
-3. **Затем**: Vite/Next.js (чтобы запустить)
+3. **Затем**: Vite (чтобы запустить)
 4. **Параллельно**: Zustand (простая, 1 день)
 5. **Потом**: Rust (отдельно, 4-6 недель)
    - [The Rust Book](https://doc.rust-lang.org/book/) + [Rustlings](https://github.com/rust-lang/rustlings)
@@ -730,13 +706,13 @@ IDS — хороший пример для изучения, потому что
 - **Кастомный код**: YAML-сериализатор без библиотек, regex-парсер frontmatter
 - **Cross-platform**: 3 ОС (Linux/Windows/macOS), нюансы каждой
 - **CI/CD matrix**: параллельные сборки, secrets, conditional steps
-- **Реальные баги и фиксы**: каждый фикс — урок (UUID polyfill, CRLF, oklch, PostCSS isolation)
+- **Реальные баги и фиксы**: каждый фикс — урок (UUID polyfill, CRLF, oklch, WebKitGTK clipboard)
 
 ### Файлы для разбора:
-- `src/lib/frontmatter.ts` — кастомный YAML-сериализатор (без js-yaml)
-- `src/lib/store.ts` — Zustand store с async actions
-- `src/components/markdown-editor.tsx` — редактор с 3 режимами, paste/drop
-- `src/components/editor-view.tsx` — интегратор формы + редактора
+- `ids-desktop/src/lib/frontmatter.ts` — кастомный YAML-сериализатор (без js-yaml)
+- `ids-desktop/src/lib/store.ts` — Zustand store с async actions
+- `ids-desktop/src/components/markdown-editor.tsx` — редактор с 3 режимами, paste/drop
+- `ids-desktop/src/components/editor-view.tsx` — интегратор формы + редактора
 - `ids-desktop/src-tauri/src/commands.rs` — Rust-команды (ФС, git, clipboard)
 - `.github/workflows/release.yml` — CI matrix, signing, version, portable
 

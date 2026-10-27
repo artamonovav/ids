@@ -1,7 +1,7 @@
 name: CI
 
-# Линт + сборка веб-приложения (Next.js) на push/PR.
-# Rust не нужен. Запускается автоматически.
+# Сборка фронтенда десктоп-приложения (Vite + React) на push/PR.
+# Rust не нужен — полная сборка бинарников выполняется в release.yml.
 
 on:
   push:
@@ -12,12 +12,14 @@ permissions:
   contents: read
 
 jobs:
-  web:
-    name: Web (lint + build)
+  frontend:
+    name: Frontend (build)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ids-desktop
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun run lint
       - run: bun run build
