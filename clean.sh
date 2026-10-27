@@ -3,11 +3,11 @@
 # Запуск: bash clean.sh [опции]
 # Опции:
 #   --dry-run   только показать что будет удалено, не удалять
-#   --deep      включает ids-desktop/src-tauri/target/ (Rust, ~ГБ — долго пересобирать)
+#   --deep      включает src-tauri/target/ (Rust, ~ГБ — долго пересобирать)
 #   --help      эта справка
 #
 # Безопасно: удаляет ТОЛЬКО известные build-артефакты и кэш. НЕ трогает:
-#   .git/, ids-desktop/src/, *.ts/tsx, package.json, tsconfig.json, .github/, docker/, configs.
+#   .git/, src/, *.ts/tsx, package.json, tsconfig.json, .github/, docker/, configs.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -25,13 +25,13 @@ done
 # Список путей для очистки (относительно корня репо).
 # Формат: "путь|описание|требует_--deep"
 TARGETS=(
-  "ids-desktop/dist|Vite build output (Tauri)|0"
-  "ids-desktop/node_modules|deps Tauri-фронта (bun install)|0"
-  "ids-desktop/artifacts|копии артефактов сборки|0"
-  "ids-desktop/src-tauri/gen|сгенерённые Tauri-файлы|0"
-  "ids-desktop/.vite|Vite кэш deps|0"
+  "dist|Vite build output|0"
+  "node_modules|deps фронтенда (bun install)|0"
+  "artifacts|копии артефактов сборки|0"
+  "src-tauri/gen|сгенерённые Tauri-файлы|0"
+  ".vite|Vite кэш deps|0"
   "*.log|лог-файлы|0"
-  "ids-desktop/src-tauri/target|Rust build output (~ГБ, долго пересобирать)|1"
+  "src-tauri/target|Rust build output (~ГБ, долго пересобирать)|1"
 )
 
 echo "=== IDS repo cleaner ==="
@@ -86,4 +86,4 @@ if [ $DRY_RUN -eq 1 ]; then
 fi
 echo ""
 echo "Для пересборки после очистки:"
-echo "  cd ids-desktop && bun install && bash build.sh   # Tauri desktop"
+echo "  bun install && bash build.sh                     # Tauri desktop"

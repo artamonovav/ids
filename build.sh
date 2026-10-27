@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Turnkey-сборка IDS desktop (Tauri). Запускать ВНУТРИ контейнера tauri:
 #   docker compose --profile tauri run --rm tauri
-#   cd ids-desktop && bash build.sh
-# Фронтенд уже внутри ids-desktop/src/ (self-contained).
+#   bash build.sh
+# Или на хосте из корня репозитория (нужны Bun, Rust и системные библиотеки Tauri).
 set -euo pipefail
 cd "$(dirname "$0")"
 

@@ -25,7 +25,7 @@ IDS
 | **Язык (бэк)** | Rust | 2021 ed. | Tauri-бэкенд | Java/C++ (но ownership model) |
 | **UI-библиотека** | React | 19 | Везде | Swing/JavaFX (декларативный) |
 | **Сборщик (десктоп)** | Vite | 6 | Tauri-фронтенд | Maven/Gradle (для фронта) |
-| **Десктоп-фреймворк** | Tauri | 2 | ids-desktop | Electron (но на Rust) |
+| **Десктоп-фреймворк** | Tauri | 2 | src-tauri/ | Electron (но на Rust) |
 | **CSS-фреймворк** | Tailwind CSS | 4 | Везде | — (нет аналога в Java) |
 | **UI-компоненты** | shadcn/ui | New York | Везде | — (готовые виджеты) |
 | **State management** | Zustand | 5 | Везде | Singleton pattern |
@@ -709,11 +709,11 @@ IDS — хороший пример для изучения, потому что
 - **Реальные баги и фиксы**: каждый фикс — урок (UUID polyfill, CRLF, oklch, WebKitGTK clipboard)
 
 ### Файлы для разбора:
-- `ids-desktop/src/lib/frontmatter.ts` — кастомный YAML-сериализатор (без js-yaml)
-- `ids-desktop/src/lib/store.ts` — Zustand store с async actions
-- `ids-desktop/src/components/markdown-editor.tsx` — редактор с 3 режимами, paste/drop
-- `ids-desktop/src/components/editor-view.tsx` — интегратор формы + редактора
-- `ids-desktop/src-tauri/src/commands.rs` — Rust-команды (ФС, git, clipboard)
+- `src/lib/frontmatter.ts` — кастомный YAML-сериализатор (без js-yaml)
+- `src/lib/store.ts` — Zustand store с async actions
+- `src/components/markdown-editor.tsx` — редактор с 3 режимами, paste/drop
+- `src/components/editor-view.tsx` — интегратор формы + редактора
+- `src-tauri/src/commands.rs` — Rust-команды (ФС, git, clipboard)
 - `.github/workflows/release.yml` — CI matrix, signing, version, portable
 
 ---

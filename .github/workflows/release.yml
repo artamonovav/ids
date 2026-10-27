@@ -1,7 +1,7 @@
 name: Release (Tauri desktop)
 
 # Кроссплатформенная сборка IDS desktop (Tauri 2) по тегу v*.
-# Проект — ids-desktop/ (self-contained: фронтенд + src-tauri внутри).
+# Проект — корень репозитория (фронтенд + src-tauri).
 # Запуск: git tag v0.1.0 && git push origin v0.1.0
 # Артефакты (.msi/.exe-NSIS/.zip-portable на Windows, .app/.dmg на macOS,
 # .deb/.AppImage на Linux) — в GitHub Release (черновик).
@@ -28,15 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Проверка ids-desktop/src-tauri
+      - name: Проверка src-tauri
         id: tauri_exists
         shell: bash
         run: |
-          if [ -f ids-desktop/src-tauri/tauri.conf.json ]; then
+          if [ -f src-tauri/tauri.conf.json ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::ids-desktop/src-tauri не найден — сборка пропущена."
+            echo "::notice::src-tauri не найден — сборка пропущена."
           fi
 
       # Создать draft-release ЗАРАНЕЕ (до долгой сборки Rust). Если GITHUB_TOKEN
@@ -89,12 +89,10 @@ jobs:
       - name: Install frontend deps
         if: steps.tauri_exists.outputs.exists == 'true'
         run: bun install --frozen-lockfile
-        working-directory: ids-desktop
 
       - name: Generate icons (logo.svg -> tauri icon)
         if: steps.tauri_exists.outputs.exists == 'true'
         run: bash build-icons.sh
-        working-directory: ids-desktop
 
       # Установить версию из git-тега (v0.1.2 → 0.1.2) во все конфиги,
       # которые Tauri использует для имени артефакта. Без этого .deb/.msi/.app
@@ -102,7 +100,6 @@ jobs:
       - name: Set version from git tag
         if: steps.tauri_exists.outputs.exists == 'true'
         shell: bash
-        working-directory: ids-desktop
         env:
           VERSION: ${{ github.ref_name }}
         run: |
@@ -167,7 +164,7 @@ jobs:
           # (только если все 4 секрета заданы). Не заданы → env не содержит
           # APPLE_* → tauri пропускает подпись → unsigned build.
         with:
-          projectPath: ids-desktop
+          projectPath: .
           tagName: ${{ github.ref_name }}
           releaseName: "IDS ${{ github.ref_name }}"
           releaseDraft: true
@@ -182,7 +179,6 @@ jobs:
       - name: Package portable Windows zip
         if: steps.tauri_exists.outputs.exists == 'true' && matrix.platform == 'windows-latest'
         shell: bash
-        working-directory: ids-desktop
         run: |
           set -e
           # Сырой exe называется по имени Cargo-пакета (ids-desktop.exe),
@@ -231,7 +227,6 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: ids-desktop
         run: |
           # gh release upload добавляет файлы в существующий релиз (созданный
           # tauri-action как draft), не меняя draft/prerelease статус.

@@ -9,12 +9,12 @@
 
 IDS — графическое приложение для заполнения локализаций проблем по единому
 шаблону (Markdown + YAML frontmatter). Единственный delivery-таргет — десктоп
-на Tauri 2 (Linux, Windows, macOS), код в `ids-desktop/`:
+на Tauri 2 (Linux, Windows, macOS), код в корне репозитория:
 
 | Слой | Технология | Где |
 |---|---|---|
-| Фронтенд | Vite + React 19 + Zustand | `ids-desktop/src/` |
-| Бэкенд | Rust (Tauri 2): реальная ФС + системный Git | `ids-desktop/src-tauri/` |
+| Фронтенд | Vite + React 19 + Zustand | `src/` |
+| Бэкенд | Rust (Tauri 2): реальная ФС + системный Git | `src-tauri/` |
 
 Фронтенд (React-компоненты) и бэкенд разделены IPC-мостом `invoke`:
 Rust-команды (`std::fs` + системный `git`) вызываются из Zustand store.
@@ -30,7 +30,7 @@ Rust-команды (`std::fs` + системный `git`) вызываются 
 graph TB
     subgraph "Десктоп-приложение (Tauri 2)"
         D_WEBVIEW[WebView<br/>WebKit2GTK / WebView2 / WKWebView]
-        D_FRONT[Vite + React<br/>ids-desktop/src/]
+        D_FRONT[Vite + React<br/>src/]
         D_STORE[store.ts<br/>Zustand]
         D_RUST[Rust backend<br/>commands.rs]
         D_FS[(ФС + Git)]
@@ -41,7 +41,7 @@ graph TB
     end
 ```
 
-**Ключевое:** компоненты (`ids-desktop/src/components/`) не знают о хранении —
+**Ключевое:** компоненты (`src/components/`) не знают о хранении —
 они вызывают действия store, а store обращается к Rust через `invoke()`.
 
 ---
@@ -561,7 +561,7 @@ flowchart TB
     DEV[Разработчик<br/>git tag v0.2.0<br/>git push origin v0.2.0]
 
     subgraph "release.yml (trigger: tag v*)"
-        CHECK[1. Проверка<br/>ids-desktop/src-tauri/ существует?]
+        CHECK[1. Проверка<br/>src-tauri/ существует?]
         REL[2. Ensure draft release<br/>gh release create --draft<br/>fail-fast on permission]
         SETUP[3. setup-bun + setup-node + rust-toolchain]
         VARS[4. Set version from tag<br/>v0.2.0 → 0.2.0<br/>tauri.conf + Cargo.toml + package.json]
@@ -606,7 +606,7 @@ flowchart TB
 
 ```
 1.  actions/checkout
-2.  Проверка ids-desktop/src-tauri
+2.  Проверка src-tauri
 3.  Ensure draft release (fail-fast on permission)
 4.  oven-sh/setup-bun
 5.  actions/setup-node (v22)
@@ -629,7 +629,7 @@ flowchart TB
 
 ```mermaid
 graph LR
-    IDS_SRC[ids-desktop/<br/>src/ + src-tauri/]
+    IDS_SRC[repo/<br/>src/ + src-tauri/]
     BUILD_SH[build.sh<br/>bun install + build-icons + tauri build]
     TARG[src-tauri/target/release/bundle/]
     ART[artifacts/<br/>копия для хоста]
@@ -644,8 +644,8 @@ graph LR
 | Где | Как | Артефакт |
 |---|---|---|
 | Linux (Docker) | `docker compose --profile tauri run --rm tauri` → `bash build.sh` | `.deb`, `.AppImage` |
-| Windows | на Windows: `cd ids-desktop && bash build.sh` | `.msi`, `.exe`, `.zip` |
-| macOS | на macOS: `cd ids-desktop && bash build.sh` | `.app`, `.dmg` |
+| Windows | на Windows: `bash build.sh` | `.msi`, `.exe`, `.zip` |
+| macOS | на macOS: `bash build.sh` | `.app`, `.dmg` |
 | **CI (matrix)** | `git tag v* && git push origin v*` → release.yml | все 3 платформы |
 
 **Кросс-компиляция невозможна** — Tauri требует нативный Rust + системный WebView для каждой платформы.
@@ -774,28 +774,28 @@ WebKit2GTK на Linux не экспонирует image как `File` item в `c
 
 ```
 ids/
-├── ids-desktop/                  # Десктоп (Tauri 2) — единственный таргет
+├── src/                          # Десктоп-фронтенд (Vite + React) — единственный таргет
+│   ├── main.tsx                  #   ErrorBoundary + Root
+│   ├── components/               #   app-shell, workspace-view, editor-view,
+│   │   └── ui/                   #   frontmatter-form, markdown-editor, settings-view,
+│   │                             #   setup-wizard; ui/ — shadcn/ui
+│   └── lib/
+│       ├── store.ts              #   Zustand store (invoke → Rust)
+│       └── ...                   #   frontmatter, repo, types, template
+├── src-tauri/                    # Rust-бэкенд (Tauri 2)
 │   ├── src/
-│   │   ├── main.tsx              #   ErrorBoundary + Root
-│   │   ├── components/           #   app-shell, workspace-view, editor-view,
-│   │   │   └── ui/               #   frontmatter-form, markdown-editor, settings-view,
-│   │   │                         #   setup-wizard; ui/ — shadcn/ui
-│   │   └── lib/
-│   │       ├── store.ts          #   Zustand store (invoke → Rust)
-│   │       └── ...               #   frontmatter, repo, types, template
-│   ├── src-tauri/
-│   │   ├── src/
-│   │   │   ├── main.rs           #   entry
-│   │   │   ├── lib.rs            #   register commands + plugins
-│   │   │   └── commands.rs       #   Rust-команды (ФС, git, clipboard)
-│   │   ├── Cargo.toml            #   deps: tauri, serde, base64, clipboard
-│   │   ├── tauri.conf.json       #   productName, bundle targets
-│   │   └── capabilities/
-│   │       └── default.json      #   permissions
-│   ├── build.sh                  #   turnkey: install + icons + tauri build
-│   ├── build-icons.sh            #   logo.svg → tauri icons
-│   ├── vite.config.ts            #   Vite + @tailwindcss/vite
-│   └── package.json
+│   │   ├── main.rs               #   entry
+│   │   ├── lib.rs                #   register commands + plugins
+│   │   └── commands.rs           #   Rust-команды (ФС, git, clipboard)
+│   ├── Cargo.toml                #   deps: tauri, serde, base64, clipboard
+│   ├── tauri.conf.json           #   productName, bundle targets
+│   └── capabilities/
+│       └── default.json          #   permissions
+├── public/logo.svg               # Исходная иконка приложения
+├── build.sh                      # turnkey: install + icons + tauri build
+├── build-icons.sh                # logo.svg → tauri icons
+├── vite.config.ts                # Vite + @tailwindcss/vite
+├── package.json, bun.lock
 │
 ├── .github/workflows/
 │   ├── ci.yml                    #   frontend: bun run build (push/PR)

@@ -3,6 +3,12 @@ node_modules/
 
 # Build
 dist/
+artifacts/
+
+# Tauri (Rust + сгенерированные иконки)
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/
 
 # Logs
 *.log

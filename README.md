@@ -20,8 +20,7 @@
 
 ## 1. Сборка и запуск
 
-Весь код десктопа лежит в [`ids-desktop/`](ids-desktop). Команды ниже
-выполняются из этой папки.
+Все команды ниже выполняются из корня репозитория.
 
 ### 1.1 Требования
 
@@ -51,7 +50,6 @@ Git for Windows, затем `npm install -g bun` и rustup
 ### 1.2 Разработка
 
 ```bash
-cd ids-desktop
 bun install
 bun x tauri dev        # откроется окно приложения, hot-reload фронтенда
 ```
@@ -59,7 +57,6 @@ bun x tauri dev        # откроется окно приложения, hot-r
 ### 1.3 Сборка установщиков
 
 ```bash
-cd ids-desktop
 bash build.sh         # bun install + иконки + tauri build
 ```
 
@@ -80,7 +77,7 @@ bash build.sh         # bun install + иконки + tauri build
 ```bash
 docker compose --profile tauri run --rm tauri
 # внутри контейнера:
-cd ids-desktop && bash build.sh
+bash build.sh
 ```
 
 Образ `docker/tauri.Dockerfile` содержит Rust, Bun и библиотеки WebKitGTK.
@@ -100,27 +97,27 @@ bash clean.sh --help         # справка
 ## 2. Структура проекта
 
 ```
-ids-desktop/
-  src/                          React-фронтенд (Vite)
-    main.tsx                    точка входа, ErrorBoundary, загрузка через init()
-    components/                 экраны и UI (app-shell, workspace-view, editor-view, ...)
-      ui/                       shadcn/ui компоненты
-    lib/
-      store.ts                  Zustand store (invoke → Rust)
-      frontmatter.ts            YAML-сериализатор (порядок полей + комментарии)
-      repo.ts                   шаблон, справочники, конфиг репозитория
-      types.ts                  доменные типы
-      template.ts               эталонный шаблон (fallback)
-  src-tauri/
-    src/
-      main.rs                   entry
-      lib.rs                    регистрация команд и плагинов
-      commands.rs               Rust-команды: ФС, git, clipboard
-    tauri.conf.json             имя продукта, bundle targets
-    capabilities/default.json   права Tauri
-  build.sh                      сборка под ключ (install + icons + tauri build)
-  build-icons.sh               logo.svg → иконки приложения
-  vite.config.ts
+src/                             React-фронтенд (Vite)
+  main.tsx                      точка входа, ErrorBoundary, загрузка через init()
+  components/                   экраны и UI (app-shell, workspace-view, editor-view, ...)
+    ui/                         shadcn/ui компоненты
+  lib/
+    store.ts                    Zustand store (invoke → Rust)
+    frontmatter.ts              YAML-сериализатор (порядок полей + комментарии)
+    repo.ts                     шаблон, справочники, конфиг репозитория
+    types.ts                    доменные типы
+    template.ts                 эталонный шаблон (fallback)
+src-tauri/
+  src/
+    main.rs                     entry
+    lib.rs                      регистрация команд и плагинов
+    commands.rs                 Rust-команды: ФС, git, clipboard
+  tauri.conf.json               имя продукта, bundle targets
+  capabilities/default.json     права Tauri
+public/logo.svg                 исходная иконка приложения
+build.sh                        сборка под ключ (install + icons + tauri build)
+build-icons.sh                  logo.svg → иконки приложения
+vite.config.ts, package.json, tsconfig.json, tailwind.config.ts, index.html
 docker/
   tauri.Dockerfile              образ для Linux-сборки (Rust + WebKitGTK)
 docker-compose.yml              сервис tauri
@@ -131,7 +128,7 @@ docker-compose.yml              сервис tauri
 
 ---
 
-## 3. Команды (`ids-desktop/package.json`)
+## 3. Команды (`package.json`)
 
 - `bun run dev` — Vite dev-сервер (только фронтенд, без Tauri; команды `invoke` не работают).
 - `bun run build` — сборка фронтенда в `dist/`.
@@ -171,7 +168,7 @@ variables → Actions → New repository secret):
 
 ### Windows: portable exe — иконка не соответствует logo.svg
 
-Иконки генерируются из `ids-desktop/public/logo.svg` → `source.png` → `tauri icon`
+Иконки генерируются из `public/logo.svg` → `source.png` → `tauri icon`
 (все размеры + `.ico`) шагом `build-icons.sh`. Иконка встраивается в `.exe`
 через `tauri_build::build()` в `build.rs`.
 
@@ -201,7 +198,7 @@ secret `RELEASE_TOKEN` и замена `GITHUB_TOKEN` → `RELEASE_TOKEN` в `re
 
 ### 5.1 `ci.yml` — проверка фронтенда
 Запускается на push в `main`/`master` и на PR. Ставит Bun, делает
-`bun install --frozen-lockfile` и `bun run build` в `ids-desktop/`. Rust не нужен.
+`bun install --frozen-lockfile` и `bun run build`. Rust не нужен.
 
 ### 5.2 `release.yml` — сборка бинарников (Windows / macOS / Linux)
 Запускается при создании git-тега вида `v*`. На каждой ОС ставится Rust (на

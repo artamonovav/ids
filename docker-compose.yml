@@ -3,7 +3,7 @@
 services:
   # --- Десктоп-сборка Tauri (Rust уже ВНУТРИ образа) ---
   # Запуск: docker compose --profile tauri run --rm tauri
-  # Внутри: cd ids-desktop && bash build.sh
+  # Внутри: bash build.sh
   tauri:
     profiles: [tauri]
     build:
@@ -11,9 +11,9 @@ services:
       dockerfile: tauri.Dockerfile
     working_dir: /app
     volumes:
-      - ./ids-desktop:/app/ids-desktop
+      - ./:/app
       # кэш сборки Rust (тяжёлый) — отдельный том:
-      - tauri_target:/app/ids-desktop/src-tauri/target
+      - tauri_target:/app/src-tauri/target
       - cargo_cache:/root/.cargo
     command: bash
     stdin_open: true
