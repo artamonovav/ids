@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import { useStore, selectFolders } from "@/lib/store"
 import { Button } from "@/components/ui/button"

@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import { useStore } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"

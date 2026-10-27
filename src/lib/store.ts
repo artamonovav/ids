@@ -2,8 +2,6 @@
 // base = папка проекта (выбранная пользователем). Git — через host-бинарник.
 // Компоненты (editor-view/workspace-view/...) не меняются — зовут те же действия.
 
-"use client"
-
 import { create } from "zustand"
 import { invoke } from "@tauri-apps/api/core"
 import type { Localization, Settings, SyncStatus, View, DictName } from "./types"

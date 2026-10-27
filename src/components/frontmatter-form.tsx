@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import type { Frontmatter, Dictionaries } from "@/lib/types"
 import { Input } from "@/components/ui/input"
