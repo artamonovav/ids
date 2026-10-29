@@ -26,7 +26,7 @@ jobs:
           - platform: macos-latest
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Проверка src-tauri
         id: tauri_exists
@@ -72,7 +72,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         if: steps.tauri_exists.outputs.exists == 'true'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         if: steps.tauri_exists.outputs.exists == 'true'
         with:
           node-version: 22
