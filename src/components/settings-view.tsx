@@ -258,13 +258,7 @@ export function SettingsView() {
           title="Папка проекта"
           desc="Текущая папка: локализации, справочники, шаблон. Можно сменить без перезапуска."
         >
-          <Input
-            value={base}
-            readOnly
-            className="font-mono text-xs"
-            placeholder="не указана"
-          />
-          <div className="space-y-3 border-t pt-3">
+          <div className="space-y-3">
             <ProjectSourceFields source={source} idPrefix="s" />
             {isRepo && (
               <BranchSelect branches={checked!.branches} value={branch} onChange={setBranch} />

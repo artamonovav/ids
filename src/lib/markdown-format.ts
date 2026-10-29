@@ -74,12 +74,44 @@ export function toggleWrap(
   }
 }
 
-/** Соответствие клавиши действию форматирования (клавиша — в нижнем регистре). */
+/** Латинский эквивалент кириллической клавиши в раскладке ЙЦУКЕН. */
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  и: 'b',
+  ш: 'i',
+  у: 'e',
+  л: 'k',
+  ч: 'x',
+}
+
+/** Действия по физической клавише (e.code): не зависят от раскладки. */
+const ACTION_BY_CODE: Record<string, FormatAction> = {
+  KeyB: 'bold',
+  KeyI: 'italic',
+  KeyE: 'code',
+  KeyK: 'link',
+  KeyX: 'strike',
+}
+
+/**
+ * Соответствие клавиши действию форматирования.
+ *
+ * e.code передаётся, чтобы горячие клавиши работали в русской раскладке:
+ * при Ctrl+И (физическая B) e.key === 'и', а e.code === 'KeyB'.
+ * Без code остаётся запасной путь по e.key, включая кириллические буквы.
+ */
 export function formatActionForKey(
   key: string,
   shift: boolean,
+  code = '',
 ): FormatAction | null {
-  const k = key.toLowerCase()
+  const fromCode = ACTION_BY_CODE[code]
+  if (fromCode) {
+    if (fromCode === 'strike') return shift ? 'strike' : null
+    return shift ? null : fromCode
+  }
+
+  const raw = key.toLowerCase()
+  const k = CYRILLIC_TO_LATIN[raw] ?? raw
   if (shift) return k === 'x' ? 'strike' : null
   switch (k) {
     case 'b':

@@ -50,8 +50,10 @@ type Mode = 'split' | 'source' | 'preview'
 // Фиксированная высота редактора: и поле ввода, и просмотр скроллятся внутри себя.
 const EDITOR_HEIGHT = 'h-[70vh]'
 
+// min-h-[70vh] дублирует высоту панели: в WebKitGTK height:100% у textarea
+// иногда схлопывается до высоты содержимого (несколько строк).
 const TEXTAREA_CLASS =
-  'font-mono text-sm w-full h-full resize-none overflow-y-auto field-sizing-fixed rounded-md border bg-transparent p-3 outline-none focus-visible:ring-[3px] [-webkit-font-smoothing:antialiased] [text-rendering:optimizeSpeed]'
+  'font-mono text-sm w-full h-full min-h-[70vh] resize-none overflow-y-auto field-sizing-fixed rounded-md border bg-transparent p-3 outline-none focus-visible:ring-[3px] [-webkit-font-smoothing:antialiased] [text-rendering:optimizeSpeed]'
 
 const REMARK_PLUGINS = [remarkGfm]
 
@@ -228,7 +230,7 @@ export function MarkdownEditor({
       if (e.nativeEvent.isComposing) return
       const mod = IS_MAC ? e.metaKey : e.ctrlKey
       if (!mod || e.altKey) return
-      const action = formatActionForKey(e.key, e.shiftKey)
+      const action = formatActionForKey(e.key, e.shiftKey, e.code)
       if (!action) return
       e.preventDefault()
       applyFormat(action)
