@@ -296,8 +296,8 @@ const useStore = create<State>()((set, get) => ({
   setFiles: (files) => set({ files }),
   // async action (как @Async метод)
   init: async () => {
-    const folder = await invoke("get_folder")
-    set({ base: folder })
+    const text = await invoke("read_app_config")
+    set({ config: parseConfig(text) })
   },
 }))
 

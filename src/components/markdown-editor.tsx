@@ -6,14 +6,21 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import {
   Bold,
   Italic,
+  Strikethrough,
+  Heading1,
   Heading2,
+  Heading3,
   List,
   ListOrdered,
+  ListChecks,
+  TextQuote,
   Table as TableIcon,
   Code as CodeIcon,
+  SquareCode,
   Link as LinkIcon,
   Image as ImageIcon,
   Paperclip,
+  Minus,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -30,6 +37,7 @@ import type { Attachment } from '@/lib/types'
 import {
   FORMAT_SPECS,
   formatActionForKey,
+  toggleHeading,
   toggleWrap,
   type FormatAction,
 } from '@/lib/markdown-format'
@@ -252,6 +260,17 @@ export function MarkdownEditor({
       onChange(newValue)
       const newCursor = lineStart + prefix.length
       restoreSelection(newCursor, newCursor)
+    },
+    [value, onChange, restoreSelection],
+  )
+
+  const applyHeading = React.useCallback(
+    (level: 1 | 2 | 3) => {
+      const ta = textareaRef.current
+      const pos = ta ? ta.selectionStart : value.length
+      const result = toggleHeading(value, pos, level)
+      onChange(result.value)
+      restoreSelection(result.start, result.end)
     },
     [value, onChange, restoreSelection],
   )
@@ -592,14 +611,35 @@ export function MarkdownEditor({
             icon={Italic}
             onClick={() => applyFormat('italic')}
           />
+          <ToolbarButton
+            label={`Зачёркнутый (${shortcutLabel('X', true)})`}
+            icon={Strikethrough}
+            onClick={() => applyFormat('strike')}
+          />
+          <ToolbarButton
+            label={`Инлайн-код (${shortcutLabel('E')})`}
+            icon={SquareCode}
+            onClick={() => applyFormat('code')}
+          />
           <Separator orientation="vertical" className="mx-1 h-6" />
+          <ToolbarButton
+            label="Заголовок 1"
+            icon={Heading1}
+            onClick={() => applyHeading(1)}
+          />
           <ToolbarButton
             label="Заголовок 2"
             icon={Heading2}
-            onClick={() => insertAtLineStart('## ')}
+            onClick={() => applyHeading(2)}
           />
           <ToolbarButton
-            label="Список"
+            label="Заголовок 3"
+            icon={Heading3}
+            onClick={() => applyHeading(3)}
+          />
+          <Separator orientation="vertical" className="mx-1 h-6" />
+          <ToolbarButton
+            label="Маркированный список"
             icon={List}
             onClick={() => insertAtLineStart('- ')}
           />
@@ -607,6 +647,16 @@ export function MarkdownEditor({
             label="Нумерованный список"
             icon={ListOrdered}
             onClick={() => insertAtLineStart('1. ')}
+          />
+          <ToolbarButton
+            label="Чек-лист"
+            icon={ListChecks}
+            onClick={() => insertAtLineStart('- [ ] ')}
+          />
+          <ToolbarButton
+            label="Цитата"
+            icon={TextQuote}
+            onClick={() => insertAtLineStart('> ')}
           />
           <Separator orientation="vertical" className="mx-1 h-6" />
           <ToolbarButton
@@ -619,7 +669,7 @@ export function MarkdownEditor({
             }
           />
           <ToolbarButton
-            label="Код"
+            label="Блок кода"
             icon={CodeIcon}
             onClick={() => insertAtCursor('```\n', '\n```', 'код')}
           />
@@ -637,6 +687,11 @@ export function MarkdownEditor({
             label="Файл в attachments"
             icon={Paperclip}
             onClick={() => fileInputRef.current?.click()}
+          />
+          <ToolbarButton
+            label="Разделитель"
+            icon={Minus}
+            onClick={() => insertBlock('\n---\n')}
           />
         </div>
       )}

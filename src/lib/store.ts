@@ -130,16 +130,35 @@ async function writeLoc(base: string, f: Localization) {
   await writeAttachments(base, f)
 }
 
-/** Настройки пользователя — в папке конфигурации ОС (вне папки проекта).
- *  Первый запуск новой версии переносит их из .tmp/config.yaml проекта.
- *  Без папки проекта (repoFiles = null) ничего не сохраняем. */
-async function loadConfig(repoFiles: Record<string, string> | null): Promise<UserConfig> {
+/** Настройки пользователя — в папке конфигурации ОС (вне папки проекта):
+ *  профиль, recentLimit и путь к текущему проекту.
+ *  При первом запуске новой версии профиль переносится из .tmp/config.yaml
+ *  проекта, путь — из старого app_data_dir/paths.json (0.2.9). */
+async function loadConfig(
+  folder: string | null,
+  repoFiles: Record<string, string> | null
+): Promise<UserConfig> {
   const text = await invoke<string | null>("read_app_config")
-  if (text !== null) return parseConfig(text)
-  if (!repoFiles) return DEFAULT_USER_CONFIG
-  const legacy = readLegacyConfig(repoFiles)
-  await invoke("write_app_config", { content: serializeConfig(legacy) })
-  return legacy
+  let config: UserConfig
+  let changed = false
+
+  if (text !== null) {
+    config = parseConfig(text)
+  } else if (repoFiles) {
+    config = readLegacyConfig(repoFiles)
+    changed = true
+  } else {
+    config = { ...DEFAULT_USER_CONFIG }
+  }
+
+  if (folder && config.folder !== folder) {
+    config = { ...config, folder }
+    changed = true
+  }
+  if (changed) {
+    await invoke("write_app_config", { content: serializeConfig(config) })
+  }
+  return config
 }
 
 /** Загрузить проект из папки: служебные файлы, справочники, локализации.
@@ -160,7 +179,7 @@ async function loadProject(folder: string): Promise<void> {
     await invoke("write_file", { base: folder, path: TEMPLATE_PATH, content })
     repoFiles[TEMPLATE_PATH] = content
   }
-  const config = await loadConfig(repoFiles)
+  const config = await loadConfig(folder, repoFiles)
   const entries = await invoke<FileEntry[]>("read_localizations", { base: folder })
   const files = parseFileEntries(entries)
   let gitIdentityMissing = false
@@ -212,6 +231,8 @@ interface State {
   prepareRepo: (url: string, folder: string) => Promise<{ isRepo: boolean; branches: string[] }>
   applyProject: (folder: string, branch: string | null) => Promise<void>
   completeSetup: (folder: string, name: string, email: string, branch: string | null) => Promise<void>
+  /** Сбросить папку проекта и вернуть мастер; профиль остаётся в конфиге. */
+  resetSetup: () => Promise<void>
   saveGitIdentity: (name: string, email: string, global: boolean) => Promise<void>
   dismissGitIdentity: () => void
   setView: (v: View) => void
@@ -248,10 +269,13 @@ export const useStore = create<State>()((set, get) => ({
 
   init: async () => {
     try {
-      const folder = await invoke<string>("get_folder")
+      const text = await invoke<string | null>("read_app_config")
+      const saved = text !== null ? parseConfig(text) : null
+      let folder = saved?.folder ?? ""
+      // миграция 0.2.9: путь лежал в app_data_dir/paths.json
+      if (!folder) folder = await invoke<string>("read_legacy_folder")
       if (!folder) {
-        const config = await loadConfig(null)
-        set({ config, view: "setup" })
+        set({ config: saved ?? DEFAULT_USER_CONFIG, view: "setup" })
         return
       }
       await loadProject(folder)
@@ -269,15 +293,33 @@ export const useStore = create<State>()((set, get) => ({
 
   applyProject: async (folder, branch) => {
     if (branch) await invoke("git_checkout_pull", { folder, branch })
-    // loadProject бросает ошибку — тогда папка в paths.json не меняется
+    // loadProject бросает ошибку — тогда папка в config.yaml не меняется
     await loadProject(folder)
-    await invoke("set_folder", { folder })
   },
 
   completeSetup: async (folder, name, email, branch) => {
     const { config } = get()
     await get().writeConfig({ ...config, profile: { ...config.profile, name, email } })
     await get().applyProject(folder, branch)
+  },
+
+  resetSetup: async () => {
+    const { config } = get()
+    const next = { ...config, folder: "" }
+    await get().writeConfig(next)
+    set({
+      base: "",
+      files: [],
+      repoFiles: {},
+      settings: { setupComplete: false, offline: false },
+      view: "setup",
+      editing: { number: null, fileId: null, mode: "view" },
+      syncStatus: "green",
+      syncError: null,
+      syncing: false,
+      gitIdentityMissing: false,
+      lastCommitMessage: null,
+    })
   },
 
   saveGitIdentity: async (name, email, global) => {

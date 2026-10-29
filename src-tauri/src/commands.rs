@@ -1,6 +1,6 @@
 // Tauri-команды IDS: файловый слой (std::fs) + host git (CLI).
-// База = папка проекта (выбранная пользователем), НЕ app_data_dir.
-// Путь к папке запоминается в app_data_dir/paths.json.
+// База = папка проекта (выбранная пользователем).
+// Путь к папке и настройки пользователя — в config.yaml (папка конфигурации ОС).
 // Git-аутентификация — через системный git (credential helper / SSH agent хоста).
 
 use std::collections::HashMap;
@@ -88,31 +88,24 @@ fn file_mtime(p: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-/// Путь к файлу-указателю (paths.json) в app_data_dir.
-fn paths_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+/// Путь к папке проекта из старого (0.2.9) `paths.json` в app_data_dir.
+/// Только чтение для миграции: актуальный путь хранится в config.yaml.
+/// Каталог не создаём — у новых установок его быть не должно.
+fn legacy_paths_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("paths.json"))
 }
 
-/// Запомненный путь к папке проекта (пусто, если не указан).
+/// Запомненный путь к папке проекта из версии 0.2.9 (пусто, если не указан).
 #[tauri::command]
-pub fn get_folder(app: tauri::AppHandle) -> Result<String, String> {
-    let p = paths_file(&app)?;
+pub fn read_legacy_folder(app: tauri::AppHandle) -> Result<String, String> {
+    let p = legacy_paths_file(&app)?;
     if !p.exists() {
         return Ok(String::new());
     }
     let content = fs::read_to_string(p).map_err(|e| e.to_string())?;
     let v: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
     Ok(v.get("folder").and_then(|s| s.as_str()).unwrap_or("").to_string())
-}
-
-/// Сохранить путь к папке проекта.
-#[tauri::command]
-pub fn set_folder(app: tauri::AppHandle, folder: String) -> Result<(), String> {
-    let p = paths_file(&app)?;
-    let json = serde_json::json!({ "folder": folder }).to_string();
-    fs::write(p, json).map_err(|e| e.to_string())
 }
 
 /// Является ли папка git-репозиторием.

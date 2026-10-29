@@ -19,13 +19,19 @@ export function SetupWizard() {
   const completeSetup = useStore((s) => s.completeSetup)
   const config = useStore((s) => s.config)
   const { toast } = useToast()
-  const source = useProjectSource()
+  // путь и профиль подставляются из config.yaml (в т.ч. после «Сброса»)
+  const source = useProjectSource(config.folder)
 
   const [step, setStep] = React.useState(0)
   const [name, setName] = React.useState(config.profile.name)
   const [email, setEmail] = React.useState(config.profile.email)
   const [branch, setBranch] = React.useState("")
   const [saving, setSaving] = React.useState(false)
+
+  React.useEffect(() => {
+    setName(config.profile.name)
+    setEmail(config.profile.email)
+  }, [config.profile.name, config.profile.email])
 
   const checked = source.checked
   const isRepo = !!checked?.isRepo && checked.branches.length > 0

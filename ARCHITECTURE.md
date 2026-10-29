@@ -338,8 +338,8 @@ graph TB
 
 ### Настройки пользователя
 
-Профиль (ФИО, email), `recentLimit` и `spaceCode` хранятся **вне папки проекта**, в папке
-конфигурации ОС (`config_dir` Tauri + `ids/config.yaml`):
+Профиль (ФИО, email), `recentLimit`, `spaceCode` и **путь к текущей папке проекта** хранятся
+**вне папки проекта**, в папке конфигурации ОС (`config_dir` Tauri + `ids/config.yaml`):
 
 | ОС | Путь |
 |---|---|
@@ -347,8 +347,14 @@ graph TB
 | macOS | `~/Library/Application Support/ids/config.yaml` |
 | Windows | `%APPDATA%\ids\config.yaml` |
 
-При первом запуске новой версии настройки переносятся из старого места — `.tmp/config.yaml`
-внутри папки проекта (миграция в `loadConfig`, сам файл не удаляется).
+При первом запуске новой версии настройки переносятся из старых мест (миграция в `loadConfig`,
+старые файлы не удаляются):
+
+- профиль и `recentLimit` — из `.tmp/config.yaml` внутри папки проекта;
+- путь к папке — из `app_data_dir/paths.json` (версия 0.2.9).
+
+Если путь в конфиге пуст, приложение показывает мастер настройки. Кнопка «Сброс»
+в настройках очищает путь и снова открывает мастер, сохраняя профиль.
 
 Имя и email для git — отдельно: это `user.name`/`user.email` репозитория или глобального
 конфига. Если они не заданы, приложение спрашивает их и сохраняет либо в `.git/config`
@@ -367,10 +373,11 @@ sequenceDiagram
 
     Note over F,FS: init() при запуске
     F->>S: useStore.getState().init()
-    S->>R: invoke("get_folder")
-    R->>FS: read paths.json
-    FS-->>R: folder path
-    R-->>S: "/path/to/project"
+    S->>R: invoke("read_app_config")
+    R->>FS: read <config>/ids/config.yaml
+    FS-->>R: folder path + профиль
+    R-->>S: config
+    Note over S,R: если folder пуст — invoke("read_legacy_folder")<br/>из app_data_dir/paths.json (0.2.9)
     S->>R: invoke("init_project", {folder})
     R->>FS: git pull --ff-only (if .git)
     R->>FS: mkdir .dictionary, _template, .tmp
@@ -392,8 +399,7 @@ sequenceDiagram
 
 | Rust-команда | Аргументы | Возвращает | Фронтенд-вызов |
 |---|---|---|---|
-| `get_folder` | — | `String` (путь) | `init()` |
-| `set_folder` | `folder: String` | `()` | `completeSetup()` |
+| `read_legacy_folder` | — | `String` (путь) | `init()` (миграция 0.2.9) |
 | `init_project` | `folder: String` | `()` | `init()`, `completeSetup()` |
 | `read_repo_files` | `base: String` | `HashMap<String, String>` | `init()` |
 | `read_localizations` | `base: String` | `Vec<FileEntry>` | `init()` |
@@ -407,7 +413,7 @@ sequenceDiagram
 | `git_checkout_pull` | `folder, branch` | `()` | `applyProject()` |
 | `git_identity` | `folder` | `{name, email}` | `loadProject()` |
 | `git_set_identity` | `folder, name, email, global` | `()` | `saveGitIdentity()` |
-| `read_app_config` | — | `Option<String>` | `loadConfig()` |
+| `read_app_config` | — | `Option<String>` | `init()`, `loadConfig()` |
 | `write_app_config` | `content` | `()` | `writeConfig()` |
 
 Команды, которые ходят в сеть (`init_project`, `git_sync`, `git_branches`, `git_clone`,
@@ -690,7 +696,7 @@ graph TB
 
     subgraph "Файловая изоляция"
         BASE[base = папка проекта<br/>выбранная пользователем]
-        NO_HOME[не app_data_dir<br/>пользователь видит где данные]
+        NO_HOME[настройки в config_dir/ids<br/>не в папке проекта]
         GITIGNORE[.tmp/ gitignored<br/>черновики + конфиг не синхронятся]
     end
 
@@ -848,7 +854,7 @@ ids/
 | shadcn/ui (не MUI) | Копирование исходников (контроль), Tailwind-native | MUI / Ant Design | emotion/JSS, не Tailwind, тяжелее |
 | Rust на host git (не git2 crate) | Системный credential helper/SSH работает | git2 crate | Нужен SSH-ключ в приложении |
 | .tmp/ gitignored | Локальные черновики + конфиг не синхронятся | Синхронить .tmp | Конфликт засекреченных данных |
-| paths.json в app_data_dir | Стандартное место Tauri, переживает reinstall | В репо | Путь к репо — пользовательский, не в git |
+| Путь проекта в config.yaml | Все настройки в одном месте; при пустом пути — мастер | paths.json в app_data_dir | Два файла, папки с identifier |
 | CRLF normalize в JS | Работает даже если .gitattributes не применился | Только .gitattributes | Git на Windows может override |
 | oklch → hex | WebKit2GTK Ubuntu 22.04 не поддерживает oklch | oklch + @supports | @supports для oklch ненадёжный |
 | UUID polyfill | WebKit2GTK < 2.40 нет crypto.randomUUID | Только crypto.randomUUID | Crash на Ubuntu 22.04 |

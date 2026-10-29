@@ -74,6 +74,35 @@ export function toggleWrap(
   }
 }
 
+/**
+ * Заголовок текущей строки: ставит `#` нужного уровня, заменяет другой уровень
+ * или снимает разметку, если уровень уже совпадает. Курсор не прыгает в конец.
+ */
+export function toggleHeading(
+  value: string,
+  start: number,
+  level: 1 | 2 | 3,
+): EditResult {
+  const lineStart = value.lastIndexOf('\n', start - 1) + 1
+  const lineEnd = value.indexOf('\n', start)
+  const end = lineEnd === -1 ? value.length : lineEnd
+  const line = value.slice(lineStart, end)
+  const prefix = '#'.repeat(level) + ' '
+  const nextLine = line.startsWith(prefix)
+    ? line.slice(prefix.length)
+    : prefix + line.replace(/^#{1,6}\s+/, '')
+  const delta = nextLine.length - line.length
+  const cursor = Math.max(
+    lineStart,
+    Math.min(start + delta, lineStart + nextLine.length),
+  )
+  return {
+    value: value.slice(0, lineStart) + nextLine + value.slice(end),
+    start: cursor,
+    end: cursor,
+  }
+}
+
 /** Латинский эквивалент кириллической клавиши в раскладке ЙЦУКЕН. */
 const CYRILLIC_TO_LATIN: Record<string, string> = {
   и: 'b',

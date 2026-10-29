@@ -33,11 +33,14 @@ export function tempFileName(): string {
 export const CONFIG_PATH = `${TMP_DIR}/config.yaml`
 
 export interface UserConfig {
+  /** Папка текущего проекта. Пусто — при запуске показывается мастер. */
+  folder: string
   profile: { name: string; email: string; spaceCode?: string }
   recentLimit: number
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
+  folder: "",
   profile: { name: "", email: "" },
   recentLimit: 3,
 }
@@ -63,6 +66,7 @@ function cfgUnquote(s: string): string {
 
 export function serializeConfig(c: UserConfig): string {
   const L: string[] = []
+  L.push(`folder: ${cfgVal(c.folder)}`)
   L.push("profile:")
   L.push(`  name: ${cfgVal(c.profile.name)}`)
   L.push(`  email: ${cfgVal(c.profile.email)}`)
@@ -73,6 +77,7 @@ export function serializeConfig(c: UserConfig): string {
 
 export function parseConfig(content: string | undefined): UserConfig {
   const cfg: UserConfig = {
+    folder: DEFAULT_USER_CONFIG.folder,
     profile: { ...DEFAULT_USER_CONFIG.profile },
     recentLimit: DEFAULT_USER_CONFIG.recentLimit,
   }
@@ -83,7 +88,9 @@ export function parseConfig(content: string | undefined): UserConfig {
     const key = m[2]
     const val = m[3]
     if (key === "profile") continue
-    if (key === "recentLimit") {
+    if (key === "folder") {
+      cfg.folder = cfgUnquote(val)
+    } else if (key === "recentLimit") {
       cfg.recentLimit = parseInt(cfgUnquote(val), 10) || 3
     } else {
       ;(cfg.profile as Record<string, string>)[key] = cfgUnquote(val)

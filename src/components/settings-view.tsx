@@ -15,7 +15,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { ArrowLeft, Plus, X, Save, GitBranch } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { ArrowLeft, Plus, X, Save, GitBranch, RotateCcw } from "lucide-react"
 import {
   BranchSelect,
   ProjectSourceFields,
@@ -131,6 +142,7 @@ export function SettingsView() {
   const setView = useStore((s) => s.setView)
   const setOffline = useStore((s) => s.setOffline)
   const applyProject = useStore((s) => s.applyProject)
+  const resetSetup = useStore((s) => s.resetSetup)
   const { toast } = useToast()
   const source = useProjectSource(base)
   const [branch, setBranch] = React.useState("")
@@ -190,6 +202,15 @@ export function SettingsView() {
     writeDictionary(name, values)
   }
 
+  async function handleReset() {
+    try {
+      await resetSetup()
+      toast({ title: "Мастер настройки", description: "Укажите папку проекта." })
+    } catch (e) {
+      toast({ title: "Не удалось сбросить", description: String(e), variant: "destructive" })
+    }
+  }
+
   return (
     <div className="space-y-4 pb-2">
       <div className="flex items-center justify-between gap-4">
@@ -202,9 +223,33 @@ export function SettingsView() {
             <p className="text-xs text-muted-foreground">Профиль, папка, справочники, шаблон.</p>
           </div>
         </div>
-        <Button size="sm" onClick={handleSave}>
-          <Save className="size-4" /> Сохранить
-        </Button>
+        <div className="flex items-center gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <RotateCcw className="size-4" /> Сброс
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Сбросить настройки?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Приложение закроет текущий проект и откроет мастер настройки.
+                  Файлы на диске не удаляются. Профиль и остальные настройки сохранятся.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Отмена</AlertDialogCancel>
+                <AlertDialogAction onClick={handleReset}>
+                  Сбросить и открыть мастер
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <Button size="sm" onClick={handleSave}>
+            <Save className="size-4" /> Сохранить
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

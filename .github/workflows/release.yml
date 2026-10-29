@@ -211,8 +211,8 @@ jobs:
             '    на Windows 10 скачайте бесплатно:' \
             '    https://developer.microsoft.com/microsoft-edge/webview2/' \
             '' \
-            'Данные пользователя (путь к папке проекта, конфиг):' \
-            '  %APPDATA%\ru.nota.ids.desktop\' \
+            'Данные пользователя (путь к папке проекта, профиль):' \
+            '  %APPDATA%\ids\config.yaml' \
             '' \
             'Для инсталляции со ярлыками в Start Menu используйте' \
             'IDS-*-x64.msi или IDS-*-x64-setup.exe из этого же релиза.' \
