@@ -88,6 +88,21 @@ graph TD
     SETTINGS --> UI
 ```
 
+### Темы и палитры
+
+Две независимые оси:
+
+- **Режим** (`system`/`light`/`dark`) — `next-themes`, ставит класс `dark`
+  на `<html>`.
+- **Палитра** (`default`/`github`/`nord`/`catppuccin`/`solarized`) —
+  `PaletteProvider` из `src/components/theme-provider.tsx` ставит
+  `data-palette` на `<html>` и хранит выбор в `localStorage` (`ids-palette`).
+
+CSS-переменные палитр заданы в `src/globals.css` парами
+`[data-palette="…"]:not(.dark)` и `.dark[data-palette="…"]`. Только hex-цвета:
+oklch() не поддерживается WebKit2GTK. Inline-скрипт в `index.html` выставляет
+`data-palette` до первой отрисовки, чтобы не мигала стандартная палитра.
+
 ### Routing (без react-router)
 
 Маршрутизация — через Zustand state `view`:
@@ -839,6 +854,7 @@ ids/
 │   │                             #   setup-wizard; ui/ — shadcn/ui
 │   └── lib/
 │       ├── store.ts              #   Zustand store (invoke → Rust)
+│       ├── theme.ts              #   список палитр, хранение и применение data-palette
 │       ├── markdown-live-preview.ts  #   live-декорации CodeMirror (Obsidian-like)
 │       └── ...                   #   frontmatter, repo, types, template
 ├── src-tauri/                    # Rust-бэкенд (Tauri 2)

@@ -1,13 +1,26 @@
 import * as React from "react"
 import { useTheme } from "next-themes"
 import { useStore, isEditable } from "@/lib/store"
+import { usePalette } from "@/components/theme-provider"
+import { PALETTES } from "@/lib/theme"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   LayoutGrid,
   Settings as SettingsIcon,
   Sun,
   Moon,
+  Monitor,
+  ChevronDown,
   Save,
   RefreshCw,
   CheckCircle2,
@@ -22,23 +35,57 @@ import { GitIdentityDialog } from "@/components/git-identity-dialog"
 import { cn } from "@/lib/utils"
 import { getVersion } from "@tauri-apps/api/app"
 
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme()
+function ThemeMenu() {
+  const { theme, resolvedTheme, setTheme } = useTheme()
+  const { palette, setPalette } = usePalette()
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
+
+  const mode = mounted ? (theme ?? "system") : "system"
+  const dark = resolvedTheme === "dark"
+  const ModeIcon = mode === "system" ? Monitor : dark ? Moon : Sun
+  const paletteName =
+    PALETTES.find((p) => p.id === palette)?.name ?? "Стандартная"
+
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label="Сменить тему"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-    >
-      {mounted && resolvedTheme === "dark" ? (
-        <Sun className="size-5" />
-      ) : (
-        <Moon className="size-5" />
-      )}
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Тема оформления"
+          title="Тема оформления"
+          className="gap-1.5 px-2"
+        >
+          <ModeIcon className="size-5" />
+          <span className="hidden md:inline">{paletteName}</span>
+          <ChevronDown className="size-3.5 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Режим
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={mode} onValueChange={setTheme}>
+          <DropdownMenuRadioItem value="system">
+            Системная
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="light">Светлая</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Тёмная</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Палитра
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={palette} onValueChange={setPalette}>
+          {PALETTES.map((p) => (
+            <DropdownMenuRadioItem key={p.id} value={p.id}>
+              {p.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -123,7 +170,7 @@ export function AppShell() {
               <SettingsIcon className="size-4" />
               <span className="hidden sm:inline">Настройки</span>
             </Button>
-            <ThemeToggle />
+            <ThemeMenu />
           </nav>
         </div>
       </header>

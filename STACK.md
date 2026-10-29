@@ -29,7 +29,7 @@ IDS
 | **CSS-фреймворк** | Tailwind CSS | 4 | Везде | — (нет аналога в Java) |
 | **UI-компоненты** | shadcn/ui | New York | Везде | — (готовые виджеты) |
 | **State management** | Zustand | 5 | Везде | Singleton pattern |
-| **Темы** | next-themes | 0.4 | Везде | — |
+| **Темы** | next-themes + собственный PaletteProvider | 0.4 | Везде | — |
 | **Markdown** | react-markdown | 10 | Просмотр тела, режим «Совмещённо» | — |
 | **Редактор Markdown** | CodeMirror 6 | 6 | Live preview, исходник, undo/redo | — |
 | **Иконки** | lucide-react | — | Везде | — |

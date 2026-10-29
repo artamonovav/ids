@@ -4,6 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>IDS</title>
+    <script>
+      // Палитра оформления до первой отрисовки, чтобы не мигала стандартная.
+      // Значение дублирует src/lib/theme.ts (PALETTE_STORAGE_KEY).
+      (function () {
+        try {
+          var id = localStorage.getItem("ids-palette")
+          if (id && id !== "default") {
+            document.documentElement.setAttribute("data-palette", id)
+          }
+        } catch (e) {
+          /* localStorage недоступен — останется стандартная палитра */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
