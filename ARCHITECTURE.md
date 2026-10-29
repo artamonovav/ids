@@ -59,7 +59,7 @@ graph TD
         SETUP[SetupWizard<br/>первый запуск: папка→ветки→профиль]
         WORK[WorkspaceView<br/>список локализаций: Последние/Черновики/Все]
         EDITOR[EditorView<br/>форма + редактор + исходник]
-        SETTINGS[SettingsView<br/>профиль, справочники, шаблон, сброс]
+        SETTINGS[SettingsView<br/>профиль, папка проекта, справочники, шаблон]
     end
 
     APP --> SETUP
@@ -113,7 +113,7 @@ graph LR
         EDIT[editing: &#123;number, fileId&#125;]
         SYNC[syncStatus: green/yellow/red]
         SETTINGS_STATE[settings: &#123;setupComplete, offline&#125;]
-        RECENT[recentLimit: number]
+        CFG[config: UserConfig<br/>профиль + recentLimit]
     end
 
     subgraph "Actions"
@@ -124,7 +124,8 @@ graph LR
         PATCH[patchFile&#40;&#41;]
         OPEN[openFolder/openFile&#40;&#41;]
         SYNC_ACT[sync&#40;&#41;]
-        RESET[resetProject&#40;&#41;]
+        PREP[prepareRepo&#40;&#41;]
+        APPLY[applyProject&#40;&#41;]
     end
 
     subgraph "Selectors"
@@ -144,9 +145,10 @@ graph LR
 interface State {
   // Данные
   files: Localization[]              // все локализации (KB + .tmp)
-  repoFiles: Record<string, string>  // справочники + шаблон + config
+  repoFiles: Record<string, string>  // справочники + шаблон
   base: string                       // путь к папке проекта
-  recentLimit: number                // N в «Последние»
+  config: UserConfig                 // профиль + recentLimit (папка конфигурации ОС)
+  gitIdentityMissing: boolean        // в git не задано имя/email
 
   // UI
   view: View                         // текущая страница
@@ -155,8 +157,9 @@ interface State {
 
   // Actions
   init: () => Promise<void>
+  prepareRepo: (url, folder) => Promise<{ isRepo, branches }>  // clone или проверка папки
+  applyProject: (folder, branch | null) => Promise<void>       // checkout + загрузка проекта
   completeSetup: (folder, name, email, branch) => Promise<void>
-  resetProject: () => Promise<void>
   createDraft: () => Promise<string>
   upsertFile: (file: Localization) => Promise<void>
   patchFile: (id, patch) => Promise<void>
@@ -282,7 +285,6 @@ graph TB
         TEMPL[_template/]
         TMP[.tmp/]
         KB[База знаний<br/>SPAS-0001/, SPAS-0002/, ...]
-        CONFIG[.tmp/config.yaml]
     end
 
     subgraph ".dictionary/"
@@ -300,7 +302,6 @@ graph TB
     subgraph ".tmp/ gitignored"
         TMP_DRAFT[tmp-xxx.md<br/>черновики]
         TMP_CLAR[SPAS-0001.md<br/>черновик с номером]
-        CONFIG2[config.yaml<br/>профиль + recentLimit]
     end
 
     subgraph "SPAS-0001/ база знаний"
@@ -332,9 +333,26 @@ graph TB
 | `SPAS-XXXX/attachments/` | Картинки/файлы | ✓ Git |
 | `.tmp/tmp-xxx.md` | Недооформленные черновики | ✗ gitignored |
 | `.tmp/SPAS-XXXX.md` | Черновик с номером | ✗ gitignored |
-| `.tmp/config.yaml` | Профиль + recentLimit | ✗ gitignored |
 
 **Инвариант:** `.tmp/` — личное (gitignored), всё остальное — база знаний (синхронизируется).
+
+### Настройки пользователя
+
+Профиль (ФИО, email), `recentLimit` и `spaceCode` хранятся **вне папки проекта**, в папке
+конфигурации ОС (`config_dir` Tauri + `ids/config.yaml`):
+
+| ОС | Путь |
+|---|---|
+| Linux | `~/.config/ids/config.yaml` |
+| macOS | `~/Library/Application Support/ids/config.yaml` |
+| Windows | `%APPDATA%\ids\config.yaml` |
+
+При первом запуске новой версии настройки переносятся из старого места — `.tmp/config.yaml`
+внутри папки проекта (миграция в `loadConfig`, сам файл не удаляется).
+
+Имя и email для git — отдельно: это `user.name`/`user.email` репозитория или глобального
+конфига. Если они не заданы, приложение спрашивает их и сохраняет либо в `.git/config`
+проекта, либо глобально (выбирает пользователь).
 
 ---
 
@@ -384,8 +402,17 @@ sequenceDiagram
 | `write_attachment` | `base, path, data_url` | `()` | `writeLoc()` (binary) |
 | `delete_file` | `base, path` | `()` | `patchFile()` (old .tmp) |
 | `git_sync` | `base, commit_message, author...` | `()` | `sync()` |
-| `git_branches` | `folder` | `Vec<String>` | `SetupWizard` |
-| `git_checkout_pull` | `folder, branch` | `()` | `completeSetup()` |
+| `git_clone` | `url, folder` | `()` | `prepareRepo()` (пустая папка) |
+| `git_branches` | `folder` | `Vec<String>` | `prepareRepo()` |
+| `git_checkout_pull` | `folder, branch` | `()` | `applyProject()` |
+| `git_identity` | `folder` | `{name, email}` | `loadProject()` |
+| `git_set_identity` | `folder, name, email, global` | `()` | `saveGitIdentity()` |
+| `read_app_config` | — | `Option<String>` | `loadConfig()` |
+| `write_app_config` | `content` | `()` | `writeConfig()` |
+
+Команды, которые ходят в сеть (`init_project`, `git_sync`, `git_branches`, `git_clone`,
+`git_checkout_pull`), — `async` и выполняются в фоновом потоке (`blocking()`): синхронная
+команда Tauri выполняется на главном потоке и замораживает окно.
 
 ### CREATE_NO_WINDOW (Windows)
 

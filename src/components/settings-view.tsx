@@ -9,29 +9,23 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { ArrowLeft, Plus, X, Save, RotateCcw } from "lucide-react"
+import { ArrowLeft, Plus, X, Save, GitBranch } from "lucide-react"
+import {
+  BranchSelect,
+  ProjectSourceFields,
+  defaultBranch,
+  useProjectSource,
+} from "@/components/project-source"
 import {
   DICT_FILES,
   TEMPLATE_PATH,
   readDictionaries,
-  readConfig,
 } from "@/lib/repo"
 import type { Dictionaries, DictName } from "@/lib/types"
 
@@ -130,37 +124,66 @@ export function SettingsView() {
   const base = useStore((s) => s.base)
   const repoFiles = useStore((s) => s.repoFiles)
   const settings = useStore((s) => s.settings)
+  const config = useStore((s) => s.config)
   const writeConfig = useStore((s) => s.writeConfig)
   const writeDictionary = useStore((s) => s.writeDictionary)
   const writeTemplateFile = useStore((s) => s.writeTemplateFile)
   const setView = useStore((s) => s.setView)
   const setOffline = useStore((s) => s.setOffline)
-  const resetProject = useStore((s) => s.resetProject)
+  const applyProject = useStore((s) => s.applyProject)
   const { toast } = useToast()
+  const source = useProjectSource(base)
+  const [branch, setBranch] = React.useState("")
+  const [switching, setSwitching] = React.useState(false)
 
   const dictionaries: Dictionaries = React.useMemo(
     () => readDictionaries(repoFiles),
     [repoFiles]
   )
-  const cfg = React.useMemo(() => readConfig(repoFiles), [repoFiles])
 
-  const [profile, setProfile] = React.useState(cfg.profile)
-  const [recentLimit, setRecentLimit] = React.useState(cfg.recentLimit)
+  const [profile, setProfile] = React.useState(config.profile)
+  const [recentLimit, setRecentLimit] = React.useState(config.recentLimit)
   const [tplContent, setTplContent] = React.useState(
     () => repoFiles[TEMPLATE_PATH] ?? ""
   )
 
-  // синхронизировать локальный state при загрузке repoFiles
+  // синхронизировать локальный state при загрузке настроек и шаблона
   React.useEffect(() => {
-    setProfile(readConfig(repoFiles).profile)
-    setRecentLimit(readConfig(repoFiles).recentLimit)
+    setProfile(config.profile)
+    setRecentLimit(config.recentLimit)
+  }, [config])
+
+  React.useEffect(() => {
     setTplContent(repoFiles[TEMPLATE_PATH] ?? "")
   }, [repoFiles])
 
-  function handleSave() {
-    writeConfig({ profile, recentLimit })
-    writeTemplateFile(tplContent)
-    toast({ title: "Настройки сохранены" })
+  const checked = source.checked
+  const isRepo = !!checked?.isRepo && checked.branches.length > 0
+
+  React.useEffect(() => {
+    setBranch(checked && isRepo ? defaultBranch(checked.branches) : "")
+  }, [checked])
+
+  async function handleSave() {
+    try {
+      await writeConfig({ ...config, profile, recentLimit })
+      await writeTemplateFile(tplContent)
+      toast({ title: "Настройки сохранены" })
+    } catch (e) {
+      toast({ title: "Не удалось сохранить", description: String(e), variant: "destructive" })
+    }
+  }
+
+  async function handleSwitchProject() {
+    const folder = source.folder.trim()
+    setSwitching(true)
+    try {
+      await applyProject(folder, isRepo ? branch : null)
+      toast({ title: "Папка проекта изменена", description: folder })
+    } catch (e) {
+      toast({ title: "Не удалось открыть проект", description: String(e), variant: "destructive" })
+    }
+    setSwitching(false)
   }
 
   function changeDict(name: DictName, values: string[]) {
@@ -226,45 +249,40 @@ export function SettingsView() {
             />
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Хранится в <code className="font-mono">.tmp/config.yaml</code> (не синхронизируется).
+            Хранится в настройках пользователя ОС, не в папке проекта.
           </p>
         </Section>
 
         {/* Папка проекта */}
-        <Section title="Папка проекта" desc="Где хранятся локализации, справочники, шаблон.">
+        <Section
+          title="Папка проекта"
+          desc="Текущая папка: локализации, справочники, шаблон. Можно сменить без перезапуска."
+        >
           <Input
             value={base}
             readOnly
             className="font-mono text-xs"
             placeholder="не указана"
           />
-          <p className="text-[11px] text-muted-foreground">
-            Чтобы сменить папку — сбросьте проект и пройдите инициализацию заново.
-            Файлы на диске не удаляются.
-          </p>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full">
-                <RotateCcw className="size-4" /> Сменить папку / сбросить проект
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Сменить папку проекта?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Приложение забудет текущую папку и вернётся к мастеру настройки.
-                  Выберите новую папку (или ту же) и пройдите инициализацию заново.
-                  Файлы на диске не удаляются.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Отмена</AlertDialogCancel>
-                <AlertDialogAction onClick={() => resetProject()}>
-                  Сбросить и выбрать новую папку
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <div className="space-y-3 border-t pt-3">
+            <ProjectSourceFields source={source} idPrefix="s" />
+            {isRepo && (
+              <BranchSelect branches={checked!.branches} value={branch} onChange={setBranch} />
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handleSwitchProject}
+              disabled={!checked || switching || source.checking}
+            >
+              <GitBranch className="size-4" />
+              {switching ? "Открываю…" : "Открыть эту папку"}
+            </Button>
+            <p className="text-[11px] text-muted-foreground">
+              Файлы на диске не удаляются. Несохранённые изменения в открытой локализации будут потеряны.
+            </p>
+          </div>
         </Section>
 
         {/* Справочники */}

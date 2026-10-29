@@ -104,7 +104,7 @@ export function WorkspaceView() {
   const clarify = useStore((s) => s.clarify)
   const removeFolderDrafts = useStore((s) => s.removeFolderDrafts)
   const removeFile = useStore((s) => s.removeFile)
-  const recentLimit = useStore((s) => s.recentLimit)
+  const recentLimit = useStore((s) => s.config.recentLimit)
   const { toast } = useToast()
 
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null)

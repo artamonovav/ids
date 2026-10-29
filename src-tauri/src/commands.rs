@@ -46,6 +46,8 @@ fn guess_mime(name: &str) -> &'static str {
 fn git_command(args: &[&str]) -> Command {
     let mut cmd = Command::new("git");
     cmd.args(args);
+    // Без терминала git не должен ждать ввода логина/пароля — падаем с ошибкой.
+    cmd.env("GIT_TERMINAL_PROMPT", "0");
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -57,6 +59,17 @@ fn git_command(args: &[&str]) -> Command {
 
 /// Путь внутри папки проекта. Разрешены только обычные компоненты:
 /// без `..`, абсолютных путей и префиксов — иначе путь может выйти за base.
+/// Выполнить блокирующую операцию (git, ФС) вне главного потока — иначе окно зависает.
+async fn blocking<T, F>(f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn join(base: &str, rel: &str) -> Result<PathBuf, String> {
     let p = Path::new(rel);
     if rel.is_empty() || !p.components().all(|c| matches!(c, Component::Normal(_))) {
@@ -112,7 +125,11 @@ pub fn is_git_repo(folder: String) -> bool {
 ///  - если git-репо → git pull (host git);
 ///  - создать служебные папки (.dictionary, _template, .tmp) + .gitignore + дефолтные справочники.
 #[tauri::command]
-pub fn init_project(folder: String) -> Result<(), String> {
+pub async fn init_project(folder: String) -> Result<(), String> {
+    blocking(move || init_project_blocking(folder)).await
+}
+
+fn init_project_blocking(folder: String) -> Result<(), String> {
     let root = Path::new(&folder);
     fs::create_dir_all(root).map_err(|e| e.to_string())?;
 
@@ -214,6 +231,7 @@ pub fn read_repo_files(base: String) -> HashMap<String, String> {
             }
         }
     }
+    // .tmp/config.yaml — старое место настроек, читается только для миграции
     for f in ["_template/localization.md", ".gitignore", ".tmp/config.yaml"] {
         let p = root.join(f);
         if let Ok(content) = fs::read_to_string(&p) {
@@ -299,21 +317,13 @@ pub fn read_attachments(base: String, number: String) -> Vec<AttachmentEntry> {
 
 // --- Git (host binary; credentials — через системный git) ---
 
-#[tauri::command]
-pub fn git_pull(base: String) -> Result<(), String> {
-    let out = git_command(&["-C", &base, "pull", "--ff-only"])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).to_string())
-    }
-}
-
 /// git pull --rebase && git add -A && git commit -m <msg> --author <a> && git push
 #[tauri::command]
-pub fn git_sync(base: String, commit_message: String, author_name: String, author_email: String) -> Result<(), String> {
+pub async fn git_sync(base: String, commit_message: String, author_name: String, author_email: String) -> Result<(), String> {
+    blocking(move || git_sync_blocking(base, commit_message, author_name, author_email)).await
+}
+
+fn git_sync_blocking(base: String, commit_message: String, author_name: String, author_email: String) -> Result<(), String> {
     let author = format!("{} <{}>", author_name, author_email);
     let run = |args: &[&str]| -> Result<(), String> {
         let out = git_command(args).output().map_err(|e| e.to_string())?;
@@ -333,7 +343,11 @@ pub fn git_sync(base: String, commit_message: String, author_name: String, autho
 
 /// Список локальных веток в папке.
 #[tauri::command]
-pub fn git_branches(folder: String) -> Result<Vec<String>, String> {
+pub async fn git_branches(folder: String) -> Result<Vec<String>, String> {
+    blocking(move || git_branches_blocking(folder)).await
+}
+
+fn git_branches_blocking(folder: String) -> Result<Vec<String>, String> {
     // Fetch remote-веток (для multi-user — актуальный список с сервера).
     // --prune: удалить умершие remote-tracking ветки. Ошибки fetch не критичны
     // (нет сети/remote — продолжаем с локальными ветками).
@@ -379,7 +393,11 @@ pub fn git_branches(folder: String) -> Result<Vec<String>, String> {
 
 /// git checkout <branch> && git pull --ff-only
 #[tauri::command]
-pub fn git_checkout_pull(folder: String, branch: String) -> Result<(), String> {
+pub async fn git_checkout_pull(folder: String, branch: String) -> Result<(), String> {
+    blocking(move || git_checkout_pull_blocking(folder, branch)).await
+}
+
+fn git_checkout_pull_blocking(folder: String, branch: String) -> Result<(), String> {
     if branch.is_empty() || branch.starts_with('-') {
         return Err(format!("недопустимое имя ветки: {branch}"));
     }
@@ -394,6 +412,104 @@ pub fn git_checkout_pull(folder: String, branch: String) -> Result<(), String> {
     run(&["-C", &folder, "checkout", &branch])?;
     run(&["-C", &folder, "pull", "--ff-only"])?;
     Ok(())
+}
+
+/// Клонирование репозитория в пустую папку (или в ещё не существующую).
+#[tauri::command]
+pub async fn git_clone(url: String, folder: String) -> Result<(), String> {
+    blocking(move || {
+        let url = url.trim().to_string();
+        if url.is_empty() || url.starts_with('-') {
+            return Err(format!("недопустимый адрес репозитория: {url}"));
+        }
+        let target = Path::new(&folder);
+        if target.exists() {
+            let mut entries = fs::read_dir(target).map_err(|e| e.to_string())?;
+            if entries.next().is_some() {
+                return Err("папка не пуста: выберите пустую папку или существующий репозиторий".into());
+            }
+        }
+        let out = git_command(&["clone", "--", &url, &folder])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+        }
+    })
+    .await
+}
+
+#[derive(Serialize)]
+pub struct GitIdentity {
+    pub name: String,
+    pub email: String,
+}
+
+/// Имя и email git с учётом локального и глобального конфига (пусто — не заданы).
+#[tauri::command]
+pub fn git_identity(folder: String) -> GitIdentity {
+    let read = |key: &str| -> String {
+        git_command(&["-C", &folder, "config", key])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default()
+    };
+    GitIdentity {
+        name: read("user.name"),
+        email: read("user.email"),
+    }
+}
+
+/// Задать имя и email git: глобально (global = true) или только для папки проекта.
+#[tauri::command]
+pub fn git_set_identity(folder: String, name: String, email: String, global: bool) -> Result<(), String> {
+    let name = name.trim().to_string();
+    let email = email.trim().to_string();
+    if name.is_empty() || email.is_empty() {
+        return Err("укажите имя и email".into());
+    }
+    for (key, value) in [("user.name", name.as_str()), ("user.email", email.as_str())] {
+        let mut args = vec!["-C", folder.as_str(), "config"];
+        if global {
+            args.push("--global");
+        }
+        args.push(key);
+        args.push(value);
+        let out = git_command(&args).output().map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+        }
+    }
+    Ok(())
+}
+
+/// Файл настроек пользователя: папка конфигурации ОС + `ids/config.yaml`
+/// (вне папки проекта). Linux: ~/.config/ids, macOS: ~/Library/Application Support/ids,
+/// Windows: %APPDATA%\ids.
+fn app_config_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().config_dir().map_err(|e| e.to_string())?.join("ids");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("config.yaml"))
+}
+
+/// Настройки пользователя (None — файла ещё нет).
+#[tauri::command]
+pub fn read_app_config(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let p = app_config_file(&app)?;
+    if !p.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(p).map(Some).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn write_app_config(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let p = app_config_file(&app)?;
+    fs::write(p, content).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

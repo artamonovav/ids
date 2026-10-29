@@ -1,11 +1,10 @@
 // Виртуальная файловая система репозитория:
 //  - .dictionary/<name>.yaml — настраиваемые справочники (база знаний, синхронизируются)
 //  - _template/localization.md — эталонный шаблон (база знаний, синхронизируется)
-//  - .tmp/ — gitignored: недооформленные черновики + ЛОКАЛЬНЫЙ конфиг (профиль, git-аутентификация)
-// В десктоп-версии (Tauri) эти файлы лежат в реальном репозитории на диске;
-// здесь эмулируются записями в persisted-сторе.
+//  - .tmp/ — gitignored: недооформленные черновики
+// Настройки пользователя (профиль, recentLimit) — вне репозитория, см. store.ts.
 
-import { serializeDocument, parseFrontmatter } from "./frontmatter"
+import { parseFrontmatter } from "./frontmatter"
 import { EMPTY_FRONTMATTER, TEMPLATE_BODY } from "./template"
 import type { Dictionaries, DictName, Frontmatter } from "./types"
 
@@ -27,8 +26,9 @@ export function tempFileName(): string {
   return `${TMP_DIR}/tmp-${rand}.md`
 }
 
-// --- Локальный конфиг (.tmp/config.yaml): профиль + git-аутентификация ----
-// Не синхронизируется (.tmp в .gitignore) — личные данные пользователя.
+// --- Настройки пользователя ------------------------------------------------
+// Хранятся вне папки проекта (см. store.ts: loadConfig). CONFIG_PATH — старое место
+// внутри .tmp, нужно только для однократной миграции.
 
 export const CONFIG_PATH = `${TMP_DIR}/config.yaml`
 
@@ -71,18 +71,18 @@ export function serializeConfig(c: UserConfig): string {
   return L.join("\n") + "\n"
 }
 
-export function readConfig(repoFiles: Record<string, string> | undefined): UserConfig {
+export function parseConfig(content: string | undefined): UserConfig {
   const cfg: UserConfig = {
     profile: { ...DEFAULT_USER_CONFIG.profile },
     recentLimit: DEFAULT_USER_CONFIG.recentLimit,
   }
-  const content = repoFiles?.[CONFIG_PATH]
   if (!content) return cfg
   for (const line of content.replace(/\r\n/g, "\n").split("\n")) {
     const m = /^(\s{0,2})([a-zA-Z_]+):\s?(.*)$/.exec(line)
     if (!m) continue
     const key = m[2]
     const val = m[3]
+    if (key === "profile") continue
     if (key === "recentLimit") {
       cfg.recentLimit = parseInt(cfgUnquote(val), 10) || 3
     } else {
@@ -90,6 +90,11 @@ export function readConfig(repoFiles: Record<string, string> | undefined): UserC
     }
   }
   return cfg
+}
+
+/** Старое место настроек: .tmp/config.yaml внутри папки проекта (только для миграции). */
+export function readLegacyConfig(repoFiles: Record<string, string> | undefined): UserConfig {
+  return parseConfig(repoFiles?.[CONFIG_PATH])
 }
 
 // --- Справочники (.dictionary/*.yaml) — база знаний, синхронизируются --------
@@ -175,15 +180,3 @@ export function readTemplate(
   }
 }
 
-// --- Первичное наполнение виртуального репозитория ----------------------
-
-export function buildSeedRepoFiles(): Record<string, string> {
-  const files: Record<string, string> = {}
-  ;(Object.keys(DICT_FILES) as DictName[]).forEach((name) => {
-    files[DICT_FILES[name]] = serializeDictYaml(DEFAULT_DICTIONARIES[name])
-  })
-  files[TEMPLATE_PATH] = serializeDocument(EMPTY_FRONTMATTER, TEMPLATE_BODY)
-  files[GITIGNORE_PATH] = `${TMP_DIR}/\n`
-  files[CONFIG_PATH] = serializeConfig(DEFAULT_USER_CONFIG)
-  return files
-}

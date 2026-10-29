@@ -9,10 +9,10 @@ import { formatAuthor, commitMessageFor, serializeDocument, parseFrontmatter } f
 import {
   tempFileName,
   readTemplate,
-  readConfig,
+  parseConfig,
+  readLegacyConfig,
   serializeDictYaml,
   serializeConfig,
-  CONFIG_PATH,
   DEFAULT_USER_CONFIG,
   DICT_FILES,
   TEMPLATE_PATH,
@@ -130,6 +130,58 @@ async function writeLoc(base: string, f: Localization) {
   await writeAttachments(base, f)
 }
 
+/** Настройки пользователя — в папке конфигурации ОС (вне папки проекта).
+ *  Первый запуск новой версии переносит их из .tmp/config.yaml проекта.
+ *  Без папки проекта (repoFiles = null) ничего не сохраняем. */
+async function loadConfig(repoFiles: Record<string, string> | null): Promise<UserConfig> {
+  const text = await invoke<string | null>("read_app_config")
+  if (text !== null) return parseConfig(text)
+  if (!repoFiles) return DEFAULT_USER_CONFIG
+  const legacy = readLegacyConfig(repoFiles)
+  await invoke("write_app_config", { content: serializeConfig(legacy) })
+  return legacy
+}
+
+/** Загрузить проект из папки: служебные файлы, справочники, локализации.
+ *  Бросает ошибку, если что-то не удалось. */
+async function loadProject(folder: string): Promise<void> {
+  await invoke("init_project", { folder })
+  const repoFiles = await invoke<Record<string, string>>("read_repo_files", { base: folder })
+  // создать недостающие справочники + шаблон на диске (если папка была пуста)
+  for (const name of ["type", "client", "environment", "product", "scope"] as DictName[]) {
+    if (!repoFiles[DICT_FILES[name]]) {
+      const content = serializeDictYaml([])
+      await invoke("write_file", { base: folder, path: DICT_FILES[name], content })
+      repoFiles[DICT_FILES[name]] = content
+    }
+  }
+  if (!repoFiles[TEMPLATE_PATH]) {
+    const content = serializeDocument(EMPTY_FRONTMATTER, TEMPLATE_BODY)
+    await invoke("write_file", { base: folder, path: TEMPLATE_PATH, content })
+    repoFiles[TEMPLATE_PATH] = content
+  }
+  const config = await loadConfig(repoFiles)
+  const entries = await invoke<FileEntry[]>("read_localizations", { base: folder })
+  const files = parseFileEntries(entries)
+  let gitIdentityMissing = false
+  if (await invoke<boolean>("is_git_repo", { folder })) {
+    const id = await invoke<{ name: string; email: string }>("git_identity", { folder })
+    gitIdentityMissing = !id.name || !id.email
+  }
+  useStore.setState({
+    base: folder,
+    repoFiles,
+    files,
+    config,
+    settings: { setupComplete: true, offline: false },
+    view: "workspace",
+    editing: { number: null, fileId: null },
+    syncStatus: "green",
+    syncError: null,
+    gitIdentityMissing,
+  })
+}
+
 interface State {
   files: Localization[]
   repoFiles: Record<string, string>
@@ -141,11 +193,16 @@ interface State {
   syncError: string | null
   syncing: boolean
   lastCommitMessage: string | null
-  recentLimit: number
+  config: UserConfig
+  /** В git папки проекта не задано имя или email — нужно запросить. */
+  gitIdentityMissing: boolean
 
   init: () => Promise<void>
-  completeSetup: (folder: string, name: string, email: string, branch: string) => Promise<void>
-  resetProject: () => Promise<void>
+  prepareRepo: (url: string, folder: string) => Promise<{ isRepo: boolean; branches: string[] }>
+  applyProject: (folder: string, branch: string | null) => Promise<void>
+  completeSetup: (folder: string, name: string, email: string, branch: string | null) => Promise<void>
+  saveGitIdentity: (name: string, email: string, global: boolean) => Promise<void>
+  dismissGitIdentity: () => void
   setView: (v: View) => void
   openFolder: (number: string) => void
   openFile: (fileId: string) => void
@@ -174,75 +231,50 @@ export const useStore = create<State>()((set, get) => ({
   syncError: null,
   syncing: false,
   lastCommitMessage: null,
-  recentLimit: 3,
+  config: DEFAULT_USER_CONFIG,
+  gitIdentityMissing: false,
 
   init: async () => {
     try {
       const folder = await invoke<string>("get_folder")
       if (!folder) {
-        set({ view: "setup" })
+        const config = await loadConfig(null)
+        set({ config, view: "setup" })
         return
       }
-      await invoke("init_project", { folder })
-      let repoFiles = await invoke<Record<string, string>>("read_repo_files", { base: folder })
-      // создать недостающие справочники + шаблон на диске (если папка была пуста)
-      for (const name of ["type", "client", "environment", "product", "scope"] as DictName[]) {
-        if (!repoFiles[DICT_FILES[name]]) {
-          const content = serializeDictYaml([])
-          await invoke("write_file", { base: folder, path: DICT_FILES[name], content })
-          repoFiles[DICT_FILES[name]] = content
-        }
-      }
-      if (!repoFiles[TEMPLATE_PATH]) {
-        const content = serializeDocument(EMPTY_FRONTMATTER, TEMPLATE_BODY)
-        await invoke("write_file", { base: folder, path: TEMPLATE_PATH, content })
-        repoFiles[TEMPLATE_PATH] = content
-      }
-      const entries = await invoke<FileEntry[]>("read_localizations", { base: folder })
-      const files = parseFileEntries(entries)
-      const cfg = readConfig(repoFiles)
-      set({
-        base: folder,
-        repoFiles,
-        files,
-        settings: { setupComplete: true, offline: false },
-        recentLimit: cfg.recentLimit,
-        view: "workspace",
-      })
+      await loadProject(folder)
     } catch (e) {
       set({ syncStatus: "red", syncError: String(e), view: "setup" })
     }
   },
 
-  completeSetup: async (folder, name, email, branch) => {
-    await invoke("set_folder", { folder })
-    await invoke("init_project", { folder })
-    // записать автора в .tmp/config.yaml
-    const config: UserConfig = { ...DEFAULT_USER_CONFIG, profile: { name, email } }
-    await invoke("write_file", { base: folder, path: CONFIG_PATH, content: serializeConfig(config) })
-    // checkout выбранной ветки + pull
-    await invoke("git_checkout_pull", { folder, branch })
-    // перезагрузить данные
-    await get().init()
+  prepareRepo: async (url, folder) => {
+    if (url.trim()) await invoke("git_clone", { url: url.trim(), folder })
+    const isRepo = await invoke<boolean>("is_git_repo", { folder })
+    const branches = isRepo ? await invoke<string[]>("git_branches", { folder }) : []
+    return { isRepo, branches }
   },
 
-  resetProject: async () => {
-    // Очистить paths.json (забыть текущую папку) и сбросить store к мастеру
-    // настройки. Файлы на диске НЕ удаляются — пользователь выберет новую
-    // папку (или ту же) и пройдёт инициализацию заново.
-    await invoke("set_folder", { folder: "" })
-    set({
-      base: "",
-      files: [],
-      repoFiles: {},
-      view: "setup",
-      editing: { number: null, fileId: null },
-      syncStatus: "green",
-      syncError: null,
-      syncing: false,
-      lastCommitMessage: null,
-    })
+  applyProject: async (folder, branch) => {
+    if (branch) await invoke("git_checkout_pull", { folder, branch })
+    // loadProject бросает ошибку — тогда папка в paths.json не меняется
+    await loadProject(folder)
+    await invoke("set_folder", { folder })
   },
+
+  completeSetup: async (folder, name, email, branch) => {
+    const { config } = get()
+    await get().writeConfig({ ...config, profile: { ...config.profile, name, email } })
+    await get().applyProject(folder, branch)
+  },
+
+  saveGitIdentity: async (name, email, global) => {
+    const { base } = get()
+    await invoke("git_set_identity", { folder: base, name, email, global })
+    set({ gitIdentityMissing: false })
+  },
+
+  dismissGitIdentity: () => set({ gitIdentityMissing: false }),
 
   setView: (v) => set({ view: v }),
   openFolder: async (number) => {
@@ -270,8 +302,8 @@ export const useStore = create<State>()((set, get) => ({
   createDraft: async () => {
     const { base, repoFiles } = get()
     const tpl = readTemplate(repoFiles)
-    const cfg = readConfig(repoFiles)
-    const author = formatAuthor(cfg.profile.name, cfg.profile.email) || ""
+    const { profile } = get().config
+    const author = formatAuthor(profile.name, profile.email) || ""
     const fm = { ...tpl.frontmatter, number: "", author }
     const id = uuid()
     const fileName = tempFileName()
@@ -371,8 +403,8 @@ export const useStore = create<State>()((set, get) => ({
     const idx = max + 1
     const id = uuid()
     const tpl = readTemplate(repoFiles)
-    const cfg = readConfig(repoFiles)
-    const author = formatAuthor(cfg.profile.name, cfg.profile.email) || ""
+    const { profile } = get().config
+    const author = formatAuthor(profile.name, profile.email) || ""
     const file: Localization = {
       id, number: parent.number, fileName: `localization-${idx}.md`, parentId: parent.id,
       frontmatter: { ...parent.frontmatter, author }, body: tpl.body, attachments: [],
@@ -402,10 +434,8 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   writeConfig: async (config) => {
-    const { base } = get()
-    const content = serializeConfig(config)
-    set((s) => ({ repoFiles: { ...s.repoFiles, [CONFIG_PATH]: content }, syncStatus: "yellow" }))
-    await invoke("write_file", { base, path: CONFIG_PATH, content })
+    await invoke("write_app_config", { content: serializeConfig(config) })
+    set({ config })
   },
 
   sync: async () => {
@@ -420,13 +450,13 @@ export const useStore = create<State>()((set, get) => ({
     )
     const dirtyKbIds = new Set(dirtyKb.map((f) => f.id))
     const commitMessage = dirtyKb.map(commitMessageFor).join("; ") || "IDS sync"
-    const cfg = readConfig(get().repoFiles)
+    const { profile } = get().config
     try {
       await invoke("git_sync", {
         base,
         commitMessage,
-        authorName: cfg.profile.name || "IDS",
-        authorEmail: cfg.profile.email || "ids@local",
+        authorName: profile.name || "IDS",
+        authorEmail: profile.email || "ids@local",
       })
       // RE-READ from disk: git_sync делает pull --rebase → на диске изменения
       // от других пользователей (multi-user). Без re-read store остался бы

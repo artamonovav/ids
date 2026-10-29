@@ -1,83 +1,44 @@
 import * as React from "react"
-import { invoke } from "@tauri-apps/api/core"
-import { open as openDialog } from "@tauri-apps/plugin-dialog"
 import { useStore } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  ArrowLeft,
-  ArrowRight,
-  Loader2,
-  FolderOpen,
-  CheckCircle2,
-} from "lucide-react"
+  BranchSelect,
+  ProjectSourceFields,
+  defaultBranch,
+  useProjectSource,
+} from "@/components/project-source"
 
 const STEPS = ["Папка проекта", "Ветка", "Профиль"] as const
 
 export function SetupWizard() {
   const completeSetup = useStore((s) => s.completeSetup)
+  const config = useStore((s) => s.config)
   const { toast } = useToast()
+  const source = useProjectSource()
 
   const [step, setStep] = React.useState(0)
-  const [folder, setFolder] = React.useState("")
-  const [name, setName] = React.useState("")
-  const [email, setEmail] = React.useState("")
-  const [branches, setBranches] = React.useState<string[]>([])
+  const [name, setName] = React.useState(config.profile.name)
+  const [email, setEmail] = React.useState(config.profile.email)
   const [branch, setBranch] = React.useState("")
-  const [checking, setChecking] = React.useState(false)
-  const [isRepo, setIsRepo] = React.useState(false)
+  const [saving, setSaving] = React.useState(false)
 
-  async function browseFolder() {
-    const selected = await openDialog({ directory: true, multiple: false })
-    if (selected) setFolder(selected as string)
-  }
+  const checked = source.checked
+  const isRepo = !!checked?.isRepo && checked.branches.length > 0
 
-  async function checkFolder() {
-    if (!folder.trim()) {
-      toast({ title: "Укажите путь к папке", variant: "destructive" })
-      return
-    }
-    setChecking(true)
-    try {
-      const repo = await invoke<boolean>("is_git_repo", { folder })
-      setIsRepo(repo)
-      if (repo) {
-        const brs = await invoke<string[]>("git_branches", { folder })
-        setBranches(brs)
-        if (brs.length > 0 && !branch) setBranch(brs[0])
-        toast({ title: "Git-репозиторий найден", description: `Веток: ${brs.length}` })
-      } else {
-        setBranches([])
-        toast({
-          title: "Не git-репозиторий",
-          description: "Будет создан новый проект со служебными папками.",
-        })
-      }
-    } catch (e) {
-      toast({ title: "Ошибка", description: String(e), variant: "destructive" })
-    }
-    setChecking(false)
-  }
+  React.useEffect(() => {
+    setBranch(checked && isRepo ? defaultBranch(checked.branches) : "")
+  }, [checked])
 
   function validateStep(): string | null {
     switch (step) {
       case 0:
-        if (!folder.trim()) return "Укажите путь к папке проекта"
+        if (!source.folder.trim()) return "Укажите путь к папке проекта"
+        if (!checked) return "Сначала проверьте папку"
         return null
       case 1:
         if (isRepo && !branch) return "Выберите ветку"
@@ -97,29 +58,24 @@ export function SetupWizard() {
       toast({ title: err, variant: "destructive" })
       return
     }
-    // На шаге выбора ветки — чекаут выбранной ветки с сервера перед переходом
-    if (step === 1 && branch) {
-      invoke("git_checkout_pull", { folder, branch })
-        .then(() => {
-          toast({ title: `Ветка ${branch} переключена`, description: "Обновления с сервера получены." })
-          setStep(step + 1)
-        })
-        .catch((e) => {
-          toast({ title: "Ошибка checkout ветки", description: String(e), variant: "destructive" })
-        })
-      return
-    }
     if (step < STEPS.length - 1) setStep(step + 1)
     else finish()
   }
 
   async function finish() {
+    setSaving(true)
     try {
-      await completeSetup(folder, name, email, branch || "main")
-      toast({ title: "Проект синхронизирован", description: "Открываю рабочую область…" })
+      await completeSetup(
+        source.folder.trim(),
+        name.trim(),
+        email.trim(),
+        isRepo ? branch : null,
+      )
+      toast({ title: "Проект открыт", description: "Открываю рабочую область…" })
     } catch (e) {
-      toast({ title: "Ошибка синхронизации", description: String(e), variant: "destructive" })
+      toast({ title: "Ошибка открытия проекта", description: String(e), variant: "destructive" })
     }
+    setSaving(false)
   }
 
   return (
@@ -135,67 +91,21 @@ export function SetupWizard() {
           <CardTitle className="text-base">{STEPS[step]}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {step === 0 && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label htmlFor="w-folder">Путь к папке проекта (git-репозиторий)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="w-folder"
-                    value={folder}
-                    onChange={(e) => setFolder(e.target.value)}
-                    placeholder="~/ids-kb"
-                    className="font-mono text-sm"
-                  />
-                  <Button variant="outline" size="sm" onClick={browseFolder}>
-                    <FolderOpen className="size-4" />
-                    <span className="hidden sm:inline">Обзор</span>
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={checkFolder} disabled={checking}>
-                    {checking ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <FolderOpen className="size-4" />
-                    )}
-                    Проверить
-                  </Button>
-                </div>
-              </div>
-              {isRepo && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="mr-1 inline size-3.5" />
-                  Git-репозиторий, {branches.length} веток
-                </p>
-              )}
-              {!isRepo && folder && !checking && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Не git-репозиторий — будет создан новый проект
-                </p>
-              )}
-            </div>
-          )}
+          {step === 0 && <ProjectSourceFields source={source} idPrefix="w" />}
 
           {step === 1 && (
             <div className="space-y-3">
-              {isRepo && branches.length > 0 ? (
-                <div className="space-y-1">
-                  <Label>Ветка</Label>
-                  <Select value={branch} onValueChange={setBranch}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches.map((b) => (
-                        <SelectItem key={b} value={b}>
-                          {b}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {isRepo ? (
+                <>
+                  <BranchSelect
+                    branches={checked!.branches}
+                    value={branch}
+                    onChange={setBranch}
+                  />
                   <p className="text-xs text-muted-foreground">
                     Будет выполнено: git checkout {branch || "..."} && git pull --ff-only
                   </p>
-                </div>
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Папка не является git-репозиторием. Пропустите шаг — будет создан новый проект.
@@ -236,11 +146,11 @@ export function SetupWizard() {
               variant="ghost"
               size="sm"
               onClick={() => setStep(Math.max(0, step - 1))}
-              disabled={step === 0}
+              disabled={step === 0 || saving}
             >
               <ArrowLeft className="size-4" /> Назад
             </Button>
-            <Button size="sm" onClick={next}>
+            <Button size="sm" onClick={next} disabled={saving}>
               {step === STEPS.length - 1 ? "Завершить" : "Далее"}
               <ArrowRight className="size-4" />
             </Button>

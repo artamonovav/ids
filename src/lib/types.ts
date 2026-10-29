@@ -86,7 +86,7 @@ export type DictName = "type" | "client" | "environment" | "product" | "scope"
 
 /**
  * Локальные настройки приложения (UI-состояние). НЕ в репозитории базы знаний.
- * Профиль и git-аутентификация хранятся отдельно — в .tmp/config.yaml (см. lib/repo.ts).
+ * Профиль и recentLimit хранятся отдельно — в настройках пользователя ОС (см. lib/store.ts).
  */
 export interface Settings {
   setupComplete: boolean

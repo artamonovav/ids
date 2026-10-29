@@ -42,7 +42,7 @@ import {
   serializeDocument,
   formatAuthor,
 } from "@/lib/frontmatter"
-import { readDictionaries, readConfig } from "@/lib/repo"
+import { readDictionaries } from "@/lib/repo"
 import type { Attachment, Frontmatter, Localization } from "@/lib/types"
 
 function fmtTime(ts: number): string {
@@ -69,7 +69,7 @@ export function EditorView() {
     () => readDictionaries(repoFiles),
     [repoFiles]
   )
-  const config = React.useMemo(() => readConfig(repoFiles), [repoFiles])
+  const config = useStore((s) => s.config)
   const { toast } = useToast()
 
   const activeFile: Localization | undefined = React.useMemo(
@@ -135,7 +135,7 @@ export function EditorView() {
       if (!current) return
       // если файл уже перенесён в базу знаний — автосохранение .tmp его не трогает
       if (!current.fileName.startsWith(".tmp/") && current.number) return
-      const spaceCode = readConfig(useStore.getState().repoFiles).profile.spaceCode || "SPAS"
+      const spaceCode = useStore.getState().config.profile.spaceCode || "SPAS"
       const defaultPrefix = `${spaceCode}-`
       const num = fm.number.trim()
       const fileName = num && num !== defaultPrefix ? `.tmp/${num}.md` : current.fileName
