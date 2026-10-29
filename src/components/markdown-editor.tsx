@@ -42,6 +42,7 @@ interface MarkdownEditorProps {
   attachments: Attachment[]
   onAddAttachment?: (a: Attachment) => void
   initialMode?: Mode
+  readOnly?: boolean
 }
 
 type Mode = 'split' | 'source' | 'preview'
@@ -163,6 +164,7 @@ export function MarkdownEditor({
   attachments,
   onAddAttachment,
   initialMode = 'split',
+  readOnly = false,
 }: MarkdownEditorProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
   const imageInputRef = React.useRef<HTMLInputElement>(null)
@@ -510,6 +512,7 @@ export function MarkdownEditor({
       onPaste={onPaste}
       onDrop={onDrop}
       onDragOver={onDragOver}
+      readOnly={readOnly}
       placeholder="Введите Markdown…"
       className={TEXTAREA_CLASS}
     />
@@ -522,6 +525,23 @@ export function MarkdownEditor({
       </ReactMarkdown>
     </div>
   )
+
+  if (readOnly) {
+    return (
+      <Tabs defaultValue="preview" className="w-full">
+        <TabsList className="mb-2">
+          <TabsTrigger value="preview">Просмотр</TabsTrigger>
+          <TabsTrigger value="source">Исходник</TabsTrigger>
+        </TabsList>
+        <TabsContent value="preview" className={EDITOR_HEIGHT}>
+          {renderPreview()}
+        </TabsContent>
+        <TabsContent value="source" className={EDITOR_HEIGHT}>
+          {renderTextarea()}
+        </TabsContent>
+      </Tabs>
+    )
+  }
 
   return (
     <Tabs

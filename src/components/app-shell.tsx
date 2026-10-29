@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useTheme } from "next-themes"
-import { useStore } from "@/lib/store"
+import { useStore, isEditable } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import {
@@ -75,7 +75,11 @@ export function AppShell() {
   const setView = useStore((s) => s.setView)
   const sync = useStore((s) => s.sync)
   const syncing = useStore((s) => s.syncing)
-  const editingActive = useStore((s) => s.view === "editor" && !!s.editing.fileId)
+  const editingActive = useStore((s) => {
+    if (s.view !== "editor" || !s.editing.fileId) return false
+    const f = s.files.find((x) => x.id === s.editing.fileId)
+    return !!f && isEditable(f, s.editing.mode)
+  })
   const { toast } = useToast()
   const [version, setVersion] = React.useState("")
   React.useEffect(() => { getVersion().then(setVersion).catch(() => {}) }, [])

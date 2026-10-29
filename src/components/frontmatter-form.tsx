@@ -35,6 +35,8 @@ interface FrontmatterFormProps {
   profileAuthor: string
   onAddProduct: (p: string) => void
   readOnly?: boolean
+  /** Номер определяет папку локализации — у сохранённой локализации не меняется. */
+  numberLocked?: boolean
 }
 
 function RequiredAsterisk() {
@@ -60,6 +62,7 @@ export function FrontmatterForm({
   profileAuthor,
   onAddProduct,
   readOnly = false,
+  numberLocked = false,
 }: FrontmatterFormProps) {
   const [productInput, setProductInput] = React.useState("")
   const [relatedInput, setRelatedInput] = React.useState("")
@@ -108,7 +111,7 @@ export function FrontmatterForm({
           id="fm-number"
           value={value.number}
           onChange={(e) => onChange({ number: e.target.value })}
-          disabled={readOnly}
+          disabled={readOnly || numberLocked}
           className="h-8 w-full text-sm"
           aria-label="Номер дефекта"
           placeholder="SPAS-0012"

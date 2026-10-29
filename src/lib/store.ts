@@ -175,11 +175,22 @@ async function loadProject(folder: string): Promise<void> {
     config,
     settings: { setupComplete: true, offline: false },
     view: "workspace",
-    editing: { number: null, fileId: null },
+    editing: { number: null, fileId: null, mode: "view" },
     syncStatus: "green",
     syncError: null,
     gitIdentityMissing,
   })
+}
+
+export type EditMode = "view" | "edit"
+
+/** Черновики (.tmp и без номера) редактируются всегда, сохранённые — только в режиме edit. */
+export function isTmpFile(f: Localization): boolean {
+  return f.fileName.startsWith(".tmp/") || !f.number
+}
+
+export function isEditable(f: Localization, mode: EditMode): boolean {
+  return isTmpFile(f) || mode === "edit"
 }
 
 interface State {
@@ -188,7 +199,7 @@ interface State {
   settings: Settings
   base: string
   view: View
-  editing: { number: string | null; fileId: string | null }
+  editing: { number: string | null; fileId: string | null; mode: EditMode }
   syncStatus: SyncStatus
   syncError: string | null
   syncing: boolean
@@ -207,6 +218,7 @@ interface State {
   openFolder: (number: string) => void
   openFile: (fileId: string) => void
   closeEditor: () => void
+  setEditMode: (mode: EditMode) => void
   createDraft: () => Promise<string>
   upsertFile: (file: Localization) => Promise<void>
   patchFile: (id: string, patch: Partial<Localization>) => Promise<void>
@@ -226,7 +238,7 @@ export const useStore = create<State>()((set, get) => ({
   settings: { setupComplete: false, offline: false },
   base: "",
   view: "setup",
-  editing: { number: null, fileId: null },
+  editing: { number: null, fileId: null, mode: "view" },
   syncStatus: "green",
   syncError: null,
   syncing: false,
@@ -285,7 +297,7 @@ export const useStore = create<State>()((set, get) => ({
       // Загрузить вложения с диска ДО set({editing}) — чтобы к моменту
       // рендера EditorView activeFile.attachments был заполнен.
       await loadAttachmentsFor(number, main.id)
-      set({ view: "editor", editing: { number, fileId: main.id } })
+      set({ view: "editor", editing: { number, fileId: main.id, mode: "view" } })
     }
   },
   openFile: async (fileId) => {
@@ -294,10 +306,11 @@ export const useStore = create<State>()((set, get) => ({
       // Загрузить вложения ВСЕГДА — даже для .tmp-черновиков (number=""),
       // иначе картинки в черновиках теряются после перезапуска.
       await loadAttachmentsFor(f.number, f.id)
-      set({ view: "editor", editing: { number: f.number, fileId: f.id } })
+      set({ view: "editor", editing: { number: f.number, fileId: f.id, mode: "view" } })
     }
   },
-  closeEditor: () => set({ view: "workspace", editing: { number: null, fileId: null } }),
+  closeEditor: () => set({ view: "workspace", editing: { number: null, fileId: null, mode: "view" } }),
+  setEditMode: (mode) => set((s) => ({ editing: { ...s.editing, mode } })),
 
   createDraft: async () => {
     const { base, repoFiles } = get()
@@ -314,7 +327,7 @@ export const useStore = create<State>()((set, get) => ({
     set((s) => ({
       files: [...s.files, file],
       view: "editor",
-      editing: { number: "", fileId: id },
+      editing: { number: "", fileId: id, mode: "edit" },
       syncStatus: "yellow",
     }))
     await writeLoc(base, file)
@@ -412,7 +425,7 @@ export const useStore = create<State>()((set, get) => ({
     }
     set((s) => ({
       files: [...s.files, file],
-      editing: { number: parent.number, fileId: id },
+      editing: { number: parent.number, fileId: id, mode: "edit" },
       view: "editor",
       syncStatus: "yellow",
     }))

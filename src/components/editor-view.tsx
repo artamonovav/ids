@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useStore } from "@/lib/store"
+import { useStore, isEditable, isTmpFile } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +29,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   ArrowLeft,
   Save,
+  Pencil,
   PencilLine,
   Copy,
   FileText,
@@ -61,6 +62,7 @@ export function EditorView() {
   const patchFile = useStore((s) => s.patchFile)
   const upsertFile = useStore((s) => s.upsertFile)
   const clarify = useStore((s) => s.clarify)
+  const setEditMode = useStore((s) => s.setEditMode)
   const closeEditor = useStore((s) => s.closeEditor)
   const openFile = useStore((s) => s.openFile)
   const repoFiles = useStore((s) => s.repoFiles)
@@ -76,6 +78,9 @@ export function EditorView() {
     () => files.find((f) => f.id === editing.fileId),
     [files, editing.fileId]
   )
+
+  const editable = !!activeFile && isEditable(activeFile, editing.mode)
+  const numberLocked = !!activeFile && !isTmpFile(activeFile)
 
   const folderFiles = React.useMemo(
     () => (editing.number ? files.filter((f) => f.number === editing.number) : []),
@@ -146,8 +151,21 @@ export function EditorView() {
     }
   }, [fm, body, attachments, editing.fileId])
 
-  // Режим тела: просмотр для чистой сохранённой локализации, редактор — для черновика/.tmp.
-  const initialEditorMode: "split" | "preview" = activeFile?.dirty ? "split" : "preview"
+  // Режим тела: редактор для редактируемой локализации, иначе просмотр.
+  const initialEditorMode: "split" | "preview" = editable ? "split" : "preview"
+
+  // Вход в режим редактирования раскрывает поля frontmatter.
+  React.useEffect(() => {
+    if (editing.mode === "edit") setFmOpen(true)
+  }, [editing.mode])
+
+  function cancelEdit() {
+    if (!activeFile) return
+    setFm(activeFile.frontmatter)
+    setBody(activeFile.body)
+    setAttachments(activeFile.attachments)
+    setEditMode("view")
+  }
 
   function onFmChange(patch: Partial<Frontmatter>) {
     setFm((prev) => ({ ...prev, ...patch }))
@@ -174,11 +192,13 @@ export function EditorView() {
     if (!activeFile) return
     const wasTemp = activeFile.fileName.startsWith(".tmp/")
     const fileName = wasTemp ? "localization.md" : activeFile.fileName
+    // номер сохранённой локализации не меняется: он задаёт папку
+    const number = wasTemp ? fm.number : activeFile.number
     const next: Localization = {
       ...activeFile,
-      number: fm.number,
+      number,
       fileName,
-      frontmatter: fm,
+      frontmatter: { ...fm, number },
       body,
       attachments,
       updatedAt: Date.now(),
@@ -200,6 +220,7 @@ export function EditorView() {
   }
 
   function handleSaveClick() {
+    if (!activeFile || !isEditable(activeFile, editing.mode)) return
     const m = validate()
     if (m.length === 0) {
       doSave()
@@ -310,17 +331,33 @@ export function EditorView() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {activeFile.number && (
-            <Button variant="outline" size="sm" onClick={handleClarify}>
-              <PencilLine className="size-4" />
-              Уточнить локализацию
+          {!isTmp && !editable && (
+            <>
+              <Button
+                size="sm"
+                onClick={() => setEditMode("edit")}
+              >
+                <Pencil className="size-4" />
+                Изменить
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleClarify}>
+                <PencilLine className="size-4" />
+                Уточнить локализацию
+              </Button>
+            </>
+          )}
+          {!isTmp && editable && (
+            <Button variant="outline" size="sm" onClick={cancelEdit}>
+              Отмена
             </Button>
           )}
-          <Button size="sm" onClick={handleSaveClick}>
-            <Save className="size-4" />
-            Сохранить
-            <span className="ml-1 hidden text-xs opacity-70 sm:inline">Ctrl+S</span>
-          </Button>
+          {editable && (
+            <Button size="sm" onClick={handleSaveClick}>
+              <Save className="size-4" />
+              Сохранить
+              <span className="ml-1 hidden text-xs opacity-70 sm:inline">Ctrl+S</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -366,6 +403,8 @@ export function EditorView() {
                 existingNumbers={existingNumbers}
                 profileAuthor={profileAuthor}
                 onAddProduct={handleAddProduct}
+                readOnly={!editable}
+                numberLocked={numberLocked}
               />
             </CardContent>
           </CollapsibleContent>
@@ -379,12 +418,13 @@ export function EditorView() {
         </CardHeader>
         <CardContent className="px-4 pb-4">
           <MarkdownEditor
-            key={activeFile.id}
+            key={`${activeFile.id}-${editable}`}
             value={body}
             onChange={setBody}
             attachments={attachments}
             onAddAttachment={handleAddAttachment}
             initialMode={initialEditorMode}
+            readOnly={!editable}
           />
         </CardContent>
       </Card>
