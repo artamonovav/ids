@@ -75,12 +75,10 @@ function Section({
 }
 
 function DictionaryEditor({
-  name,
   label,
   values,
   onChange,
 }: {
-  name: DictName
   label: string
   values: string[]
   onChange: (v: string[]) => void
@@ -273,7 +271,6 @@ export function SettingsView() {
         {DICT_META.map(({ name, label }) => (
           <Section key={name} title={`Справочник: ${label}`} path={DICT_FILES[name]}>
             <DictionaryEditor
-              name={name}
               label={label}
               values={dictionaries[name]}
               onChange={(v) => changeDict(name, v)}

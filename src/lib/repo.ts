@@ -7,7 +7,7 @@
 
 import { serializeDocument, parseFrontmatter } from "./frontmatter"
 import { EMPTY_FRONTMATTER, TEMPLATE_BODY } from "./template"
-import type { Dictionaries, DictName, Frontmatter, RepoConfig } from "./types"
+import type { Dictionaries, DictName, Frontmatter } from "./types"
 
 export const DICT_FILES: Record<DictName, string> = {
   type: ".dictionary/type.yaml",
@@ -33,7 +33,7 @@ export function tempFileName(): string {
 export const CONFIG_PATH = `${TMP_DIR}/config.yaml`
 
 export interface UserConfig {
-  profile: { name: string; email: string }
+  profile: { name: string; email: string; spaceCode?: string }
   recentLimit: number
 }
 
@@ -66,6 +66,7 @@ export function serializeConfig(c: UserConfig): string {
   L.push("profile:")
   L.push(`  name: ${cfgVal(c.profile.name)}`)
   L.push(`  email: ${cfgVal(c.profile.email)}`)
+  if (c.profile.spaceCode) L.push(`  spaceCode: ${cfgVal(c.profile.spaceCode)}`)
   L.push(`recentLimit: ${c.recentLimit}`)
   return L.join("\n") + "\n"
 }

@@ -13,6 +13,7 @@ import {
   serializeDictYaml,
   serializeConfig,
   CONFIG_PATH,
+  DEFAULT_USER_CONFIG,
   DICT_FILES,
   TEMPLATE_PATH,
   type UserConfig,
@@ -217,7 +218,7 @@ export const useStore = create<State>()((set, get) => ({
     await invoke("set_folder", { folder })
     await invoke("init_project", { folder })
     // записать автора в .tmp/config.yaml
-    const config = { profile: { name, email } }
+    const config: UserConfig = { ...DEFAULT_USER_CONFIG, profile: { name, email } }
     await invoke("write_file", { base: folder, path: CONFIG_PATH, content: serializeConfig(config) })
     // checkout выбранной ветки + pull
     await invoke("git_checkout_pull", { folder, branch })

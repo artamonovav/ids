@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
 use tauri::Manager;
@@ -55,8 +55,14 @@ fn git_command(args: &[&str]) -> Command {
     cmd
 }
 
-fn join(base: &str, rel: &str) -> PathBuf {
-    Path::new(base).join(rel)
+/// Путь внутри папки проекта. Разрешены только обычные компоненты:
+/// без `..`, абсолютных путей и префиксов — иначе путь может выйти за base.
+fn join(base: &str, rel: &str) -> Result<PathBuf, String> {
+    let p = Path::new(rel);
+    if rel.is_empty() || !p.components().all(|c| matches!(c, Component::Normal(_))) {
+        return Err(format!("недопустимый путь: {rel}"));
+    }
+    Ok(Path::new(base).join(p))
 }
 
 /// mtime файла как Unix-миллисекунды.
@@ -219,7 +225,7 @@ pub fn read_repo_files(base: String) -> HashMap<String, String> {
 
 #[tauri::command]
 pub fn write_file(base: String, path: String, content: String) -> Result<(), String> {
-    let p = join(&base, &path);
+    let p = join(&base, &path)?;
     if let Some(parent) = p.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -228,13 +234,13 @@ pub fn write_file(base: String, path: String, content: String) -> Result<(), Str
 
 #[tauri::command]
 pub fn delete_file(base: String, path: String) -> Result<(), String> {
-    fs::remove_file(join(&base, &path)).map_err(|e| e.to_string())
+    fs::remove_file(join(&base, &path)?).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn rename_file(base: String, from: String, to: String) -> Result<(), String> {
-    let src = join(&base, &from);
-    let dst = join(&base, &to);
+    let src = join(&base, &from)?;
+    let dst = join(&base, &to)?;
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -244,7 +250,7 @@ pub fn rename_file(base: String, from: String, to: String) -> Result<(), String>
 /// Записать вложение (изображение/файл) на диск — base64 → бинарный файл.
 #[tauri::command]
 pub fn write_attachment(base: String, path: String, data_url: String) -> Result<(), String> {
-    let p = join(&base, &path);
+    let p = join(&base, &path)?;
     if let Some(parent) = p.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -267,7 +273,10 @@ pub fn read_attachments(base: String, number: String) -> Vec<AttachmentEntry> {
     let dir = if number.is_empty() {
         Path::new(&base).join(".tmp").join("attachments")
     } else {
-        Path::new(&base).join(&number).join("attachments")
+        match join(&base, &number) {
+            Ok(p) => p.join("attachments"),
+            Err(_) => return out,
+        }
     };
     if let Ok(entries) = fs::read_dir(&dir) {
         for e in entries.flatten() {
@@ -371,6 +380,9 @@ pub fn git_branches(folder: String) -> Result<Vec<String>, String> {
 /// git checkout <branch> && git pull --ff-only
 #[tauri::command]
 pub fn git_checkout_pull(folder: String, branch: String) -> Result<(), String> {
+    if branch.is_empty() || branch.starts_with('-') {
+        return Err(format!("недопустимое имя ветки: {branch}"));
+    }
     let run = |args: &[&str]| -> Result<(), String> {
         let out = git_command(args).output().map_err(|e| e.to_string())?;
         if out.status.success() {
@@ -382,4 +394,24 @@ pub fn git_checkout_pull(folder: String, branch: String) -> Result<(), String> {
     run(&["-C", &folder, "checkout", &branch])?;
     run(&["-C", &folder, "pull", "--ff-only"])?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::join;
+
+    #[test]
+    fn join_accepts_relative_paths_inside_base() {
+        assert!(join("/base", "SPAS-0001/localization.md").is_ok());
+        assert!(join("/base", ".tmp/SPAS-0002.md").is_ok());
+    }
+
+    #[test]
+    fn join_rejects_escape_attempts() {
+        assert!(join("/base", "../etc/passwd").is_err());
+        assert!(join("/base", "SPAS-0001/../../x").is_err());
+        assert!(join("/base", "/etc/passwd").is_err());
+        assert!(join("/base", "").is_err());
+        assert!(join("/base", "./x").is_err());
+    }
 }
