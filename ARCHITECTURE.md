@@ -69,13 +69,15 @@ graph TD
 
     subgraph "EditorView internals"
         FM[FrontmatterForm<br/>13 полей, теги, селекты]
-        MD[MarkdownEditor<br/>3 режима: split/source/preview]
+        MD[MarkdownEditor<br/>4 режима: live/source/split/preview]
+        LIVE[markdown-live-preview.ts<br/>декорации CodeMirror]
         SRC[SourcePreview<br/>готовый Markdown]
     end
 
     EDITOR --> FM
     EDITOR --> MD
     EDITOR --> SRC
+    MD --> LIVE
 
     subgraph "UI library (shadcn/ui)"
         UI[Button, Input, Dialog,<br/>Select, Tabs, Toast,<br/>Collapsible, etc.]
@@ -359,6 +361,29 @@ graph TB
 Имя и email для git — отдельно: это `user.name`/`user.email` репозитория или глобального
 конфига. Если они не заданы, приложение спрашивает их и сохраняет либо в `.git/config`
 проекта, либо глобально (выбирает пользователь).
+
+### Редактор Markdown (CodeMirror)
+
+В режиме Live используется CodeMirror 6 (`@codemirror/lang-markdown`) с плагином
+декораций `src/lib/markdown-live-preview.ts`. Исходник остаётся настоящим Markdown:
+декорации только скрывают/оформляют разметку, но не переписывают документ.
+
+| Что | Вне строки с курсором | В строке с курсором |
+|---|---|---|
+| Заголовки `#` | маркеры скрыты, крупный шрифт | маркеры видны |
+| `**жирный**`, `*курсив*`, `~~зачёркнутый~~` | маркеры скрыты, текст оформлен | разметка видна |
+| `` `код` `` | обратные кавычки скрыты | разметка видна |
+| `[текст](url)` | скобки и URL скрыты, текст — ссылкой | разметка видна |
+| `![alt](attachments/...)` | картинка из вложений | Markdown-исходник |
+| `- [ ]` / `- [x]` | чекбокс, клик переключает | скобки видны |
+| блоки ``` | фон и моноширинный шрифт | маркеры видны |
+
+Режимы: **Live** (по умолчанию при редактировании), **Исходник** (тот же CodeMirror
+без декораций), **Совмещённо** (исходник + `react-markdown`) и **Просмотр**.
+Экземпляр CodeMirror создаётся один раз, а его DOM переносится между вкладками,
+поэтому undo/redo и позиция курсора сохраняются при переключении режимов.
+Таблицы и произвольный HTML в Live показываются как исходный текст — это осознанное
+ограничение первого этапа.
 
 ---
 
@@ -814,6 +839,7 @@ ids/
 │   │                             #   setup-wizard; ui/ — shadcn/ui
 │   └── lib/
 │       ├── store.ts              #   Zustand store (invoke → Rust)
+│       ├── markdown-live-preview.ts  #   live-декорации CodeMirror (Obsidian-like)
 │       └── ...                   #   frontmatter, repo, types, template
 ├── src-tauri/                    # Rust-бэкенд (Tauri 2)
 │   ├── src/

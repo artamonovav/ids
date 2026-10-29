@@ -30,7 +30,8 @@ IDS
 | **UI-компоненты** | shadcn/ui | New York | Везде | — (готовые виджеты) |
 | **State management** | Zustand | 5 | Везде | Singleton pattern |
 | **Темы** | next-themes | 0.4 | Везде | — |
-| **Markdown** | react-markdown | 10 | Редактор тела | — |
+| **Markdown** | react-markdown | 10 | Просмотр тела, режим «Совмещённо» | — |
+| **Редактор Markdown** | CodeMirror 6 | 6 | Live preview, исходник, undo/redo | — |
 | **Иконки** | lucide-react | — | Везде | — |
 | **Сериализация** | serde / serde_json | 1 | Rust↔JSON | Jackson |
 | **Base64** | base64 crate | 0.22 | Вложения | java.util.Base64 |
@@ -711,7 +712,8 @@ IDS — хороший пример для изучения, потому что
 ### Файлы для разбора:
 - `src/lib/frontmatter.ts` — кастомный YAML-сериализатор (без js-yaml)
 - `src/lib/store.ts` — Zustand store с async actions
-- `src/components/markdown-editor.tsx` — редактор с 3 режимами, paste/drop
+- `src/components/markdown-editor.tsx` — редактор с 4 режимами, CodeMirror, paste/drop
+- `src/lib/markdown-live-preview.ts` — декорации live-режима (Obsidian-like)
 - `src/components/editor-view.tsx` — интегратор формы + редактора
 - `src-tauri/src/commands.rs` — Rust-команды (ФС, git, clipboard)
 - `.github/workflows/release.yml` — CI matrix, signing, version, portable

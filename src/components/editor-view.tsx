@@ -151,8 +151,8 @@ export function EditorView() {
     }
   }, [fm, body, attachments, editing.fileId])
 
-  // Режим тела: редактор для редактируемой локализации, иначе просмотр.
-  const initialEditorMode: "split" | "preview" = editable ? "split" : "preview"
+  // Режим тела: live-редактор для редактируемой локализации, иначе просмотр.
+  const initialEditorMode: "live" | "preview" = editable ? "live" : "preview"
 
   // Вход в режим редактирования раскрывает поля frontmatter.
   React.useEffect(() => {

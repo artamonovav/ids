@@ -123,3 +123,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* CodeMirror: в режиме «Исходник» — моноширинный шрифт, в Live — системный. */
+.ids-md-source .cm-editor .cm-scroller {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
