@@ -1,6 +1,7 @@
 import * as React from 'react'
 import type { ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import {
   Bold,
@@ -26,6 +27,12 @@ import {
 import { Separator } from '@/components/ui/separator'
 
 import type { Attachment } from '@/lib/types'
+import {
+  FORMAT_SPECS,
+  formatActionForKey,
+  toggleWrap,
+  type FormatAction,
+} from '@/lib/markdown-format'
 import { readImage } from '@tauri-apps/plugin-clipboard-manager'
 import type { Image } from '@tauri-apps/api/image'
 
@@ -39,8 +46,22 @@ interface MarkdownEditorProps {
 
 type Mode = 'split' | 'source' | 'preview'
 
+// Фиксированная высота редактора: и поле ввода, и просмотр скроллятся внутри себя.
+const EDITOR_HEIGHT = 'h-[70vh]'
+
 const TEXTAREA_CLASS =
-  'font-mono text-sm w-full min-h-[55vh] resize-y rounded-md border bg-transparent p-3 outline-none focus-visible:ring-[3px] [-webkit-font-smoothing:antialiased] [text-rendering:optimizeSpeed]'
+  'font-mono text-sm w-full h-full resize-none overflow-y-auto field-sizing-fixed rounded-md border bg-transparent p-3 outline-none focus-visible:ring-[3px] [-webkit-font-smoothing:antialiased] [text-rendering:optimizeSpeed]'
+
+const REMARK_PLUGINS = [remarkGfm]
+
+const IS_MAC =
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform)
+
+function shortcutLabel(key: string, shift = false): string {
+  return IS_MAC
+    ? `⌘${shift ? '⇧' : ''}${key}`
+    : `Ctrl+${shift ? 'Shift+' : ''}${key}`
+}
 
 interface HastPoint {
   line: number
@@ -178,6 +199,39 @@ export function MarkdownEditor({
       restoreSelection(newStart, newEnd)
     },
     [value, onChange, restoreSelection],
+  )
+
+  const applyFormat = React.useCallback(
+    (action: FormatAction) => {
+      if (action === 'link') {
+        insertAtCursor('[', '](url)', 'текст')
+        return
+      }
+      const ta = textareaRef.current
+      if (!ta) return
+      const result = toggleWrap(
+        value,
+        ta.selectionStart,
+        ta.selectionEnd,
+        FORMAT_SPECS[action],
+      )
+      onChange(result.value)
+      restoreSelection(result.start, result.end)
+    },
+    [value, onChange, insertAtCursor, restoreSelection],
+  )
+
+  const onKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.nativeEvent.isComposing) return
+      const mod = IS_MAC ? e.metaKey : e.ctrlKey
+      if (!mod || e.altKey) return
+      const action = formatActionForKey(e.key, e.shiftKey)
+      if (!action) return
+      e.preventDefault()
+      applyFormat(action)
+    },
+    [applyFormat],
   )
 
   const insertAtLineStart = React.useCallback(
@@ -407,7 +461,9 @@ export function MarkdownEditor({
         </a>
       ),
       table: ({ children }: MdComponentProps) => (
-        <table className="border-collapse my-2">{children}</table>
+        <div className="my-2 overflow-x-auto">
+          <table className="border-collapse">{children}</table>
+        </div>
       ),
       th: ({ children }: MdComponentProps) => (
         <th className="bg-muted border px-2 py-1 text-left">{children}</th>
@@ -450,6 +506,7 @@ export function MarkdownEditor({
       ref={textareaRef}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
       onPaste={onPaste}
       onDrop={onDrop}
       onDragOver={onDragOver}
@@ -459,8 +516,10 @@ export function MarkdownEditor({
   )
 
   const renderPreview = () => (
-    <div className="min-h-[55vh] max-h-[75vh] overflow-y-auto rounded-md border bg-background p-4">
-      <ReactMarkdown components={components}>{value}</ReactMarkdown>
+    <div className="h-full overflow-y-auto rounded-md border bg-background p-4">
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
+        {value}
+      </ReactMarkdown>
     </div>
   )
 
@@ -502,14 +561,14 @@ export function MarkdownEditor({
       {(mode === 'source' || mode === 'split') && (
         <div className="flex flex-wrap items-center gap-1 mb-2">
           <ToolbarButton
-            label="Жирный"
+            label={`Жирный (${shortcutLabel('B')})`}
             icon={Bold}
-            onClick={() => insertAtCursor('**', '**', 'жирный')}
+            onClick={() => applyFormat('bold')}
           />
           <ToolbarButton
-            label="Курсив"
+            label={`Курсив (${shortcutLabel('I')})`}
             icon={Italic}
-            onClick={() => insertAtCursor('*', '*', 'курсив')}
+            onClick={() => applyFormat('italic')}
           />
           <Separator orientation="vertical" className="mx-1 h-6" />
           <ToolbarButton
@@ -543,9 +602,9 @@ export function MarkdownEditor({
             onClick={() => insertAtCursor('```\n', '\n```', 'код')}
           />
           <ToolbarButton
-            label="Ссылка"
+            label={`Ссылка (${shortcutLabel('K')})`}
             icon={LinkIcon}
-            onClick={() => insertAtCursor('[', '](url)', 'текст')}
+            onClick={() => applyFormat('link')}
           />
           <ToolbarButton
             label="Изображение (из файла)"
@@ -561,20 +620,24 @@ export function MarkdownEditor({
       )}
 
       <TabsContent value="split">
-        <PanelGroup direction="horizontal" className="min-h-[55vh]">
-          <Panel defaultSize={50} className="min-w-0">
+        <PanelGroup direction="horizontal" className={EDITOR_HEIGHT}>
+          <Panel defaultSize={50} className="min-w-0 h-full">
             {renderTextarea()}
           </Panel>
           <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/50 transition-colors rounded-full mx-0.5" />
-          <Panel defaultSize={50} className="min-w-0">
+          <Panel defaultSize={50} className="min-w-0 h-full">
             {renderPreview()}
           </Panel>
         </PanelGroup>
       </TabsContent>
 
-      <TabsContent value="source">{renderTextarea()}</TabsContent>
+      <TabsContent value="source" className={EDITOR_HEIGHT}>
+        {renderTextarea()}
+      </TabsContent>
 
-      <TabsContent value="preview">{renderPreview()}</TabsContent>
+      <TabsContent value="preview" className={EDITOR_HEIGHT}>
+        {renderPreview()}
+      </TabsContent>
     </Tabs>
   )
 }

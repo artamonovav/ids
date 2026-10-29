@@ -1,0 +1,96 @@
+export type FormatAction = 'bold' | 'italic' | 'strike' | 'code' | 'link'
+
+export interface EditResult {
+  value: string
+  start: number
+  end: number
+}
+
+export interface WrapSpec {
+  before: string
+  after: string
+  placeholder: string
+}
+
+export const FORMAT_SPECS: Record<Exclude<FormatAction, 'link'>, WrapSpec> = {
+  bold: { before: '**', after: '**', placeholder: 'жирный' },
+  italic: { before: '*', after: '*', placeholder: 'курсив' },
+  strike: { before: '~~', after: '~~', placeholder: 'зачёркнутый' },
+  code: { before: '`', after: '`', placeholder: 'код' },
+}
+
+/**
+ * Обёртка выделения маркерами с переключением: если выделение уже обёрнуто
+ * (внутри или сразу снаружи) — маркеры снимаются, иначе — добавляются.
+ * Пустое выделение заменяется плейсхолдером, который остаётся выделенным.
+ */
+export function toggleWrap(
+  value: string,
+  start: number,
+  end: number,
+  { before, after, placeholder }: WrapSpec,
+): EditResult {
+  const selected = value.slice(start, end)
+  const ch = before[0]
+
+  if (
+    selected.length >= before.length + after.length &&
+    selected.startsWith(before) &&
+    selected.endsWith(after)
+  ) {
+    const inner = selected.slice(before.length, selected.length - after.length)
+    // маркер не должен быть частью более длинной последовательности (** для курсива)
+    if (!inner.startsWith(ch) && !inner.endsWith(ch)) {
+      return {
+        value: value.slice(0, start) + inner + value.slice(end),
+        start,
+        end: start + inner.length,
+      }
+    }
+  }
+
+  if (
+    start >= before.length &&
+    value.slice(start - before.length, start) === before &&
+    value.slice(end, end + after.length) === after &&
+    value[start - before.length - 1] !== ch &&
+    value[end + after.length] !== ch
+  ) {
+    return {
+      value:
+        value.slice(0, start - before.length) +
+        selected +
+        value.slice(end + after.length),
+      start: start - before.length,
+      end: end - before.length,
+    }
+  }
+
+  const text = selected || placeholder
+  return {
+    value: value.slice(0, start) + before + text + after + value.slice(end),
+    start: start + before.length,
+    end: start + before.length + text.length,
+  }
+}
+
+/** Соответствие клавиши действию форматирования (клавиша — в нижнем регистре). */
+export function formatActionForKey(
+  key: string,
+  shift: boolean,
+): FormatAction | null {
+  const k = key.toLowerCase()
+  if (shift) return k === 'x' ? 'strike' : null
+  switch (k) {
+    case 'b':
+      return 'bold'
+    case 'i':
+      return 'italic'
+    case 'e':
+      return 'code'
+    case 'k':
+      return 'link'
+    default:
+      return null
+  }
+}
