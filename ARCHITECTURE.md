@@ -449,6 +449,7 @@ sequenceDiagram
 | Rust-команда | Аргументы | Возвращает | Фронтенд-вызов |
 |---|---|---|---|
 | `read_legacy_folder` | — | `String` (путь) | `init()` (миграция 0.2.9) |
+| `git_pull_only` | `folder` | `()` | фоновый pull при открытии проекта |
 | `init_project` | `folder: String` | `()` | `init()`, `completeSetup()` |
 | `read_repo_files` | `base: String` | `HashMap<String, String>` | `init()` |
 | `read_localizations` | `base: String` | `Vec<FileEntry>` | `init()` |

@@ -29,6 +29,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::read_legacy_folder,
             commands::is_git_repo,
+            commands::git_pull_only,
             commands::init_project,
             commands::read_localizations,
             commands::read_repo_files,

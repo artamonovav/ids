@@ -23,15 +23,20 @@ static LOG_FILE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 /// Инициализация при старте приложения: путь + ротация + запись «запуск».
 pub fn init(path: PathBuf) {
-    let mut guard = LOG_FILE.lock().ok();
-    if let Some(guard) = guard.as_mut() {
-        if let Ok(meta) = fs::metadata(&path) {
-            if meta.len() > MAX_BYTES {
-                let rotated = path.with_extension("log.1");
-                let _ = fs::rename(&path, rotated);
+    // Мьютекс берём во вложенном блоке и отпускаем ДО log(): std::Mutex
+    // нереентрабельный — init() и log() не должны держать его одновременно,
+    // иначе главный тред вечно ждёт сам себя (окно не рисуется, UI не стартует).
+    {
+        let mut guard = LOG_FILE.lock().ok();
+        if let Some(guard) = guard.as_mut() {
+            if let Ok(meta) = fs::metadata(&path) {
+                if meta.len() > MAX_BYTES {
+                    let rotated = path.with_extension("log.1");
+                    let _ = fs::rename(&path, rotated);
+                }
             }
+            **guard = Some(path);
         }
-        **guard = Some(path);
     }
     log("app", "=== запуск IDS ===");
 }

@@ -210,6 +210,32 @@ async function loadProject(folder: string): Promise<void> {
     gitIdentityMissing,
   })
   logWork(`открыт проект ${folder}`)
+
+  // Фоновый pull: рабочая область уже открыта, сеть не задерживает старт.
+  // После pull перечитываем диск — пришли ли изменения от других (multi-user).
+  void (async () => {
+    try {
+      await invoke("git_pull_only", { folder })
+      const entries = await invoke<FileEntry[]>("read_localizations", { base: folder })
+      const freshRepoFiles = await invoke<Record<string, string>>("read_repo_files", { base: folder })
+      useStore.setState((s) => {
+        // Пользователь уже успел сменить проект — не трогаем состояние.
+        if (s.base !== folder) return s
+        const diskFiles = parseFileEntries(entries)
+        return {
+          repoFiles: freshRepoFiles,
+          // Локальные dirty-версии (несинхронизированные правки) не затираем.
+          files: diskFiles.map((df) => {
+            const local = s.files.find((f) => f.id === df.id && f.dirty)
+            return local ?? df
+          }),
+        }
+      })
+      logWork("фоновый pull завершён, файлы перечитаны")
+    } catch (e) {
+      logWork(`фоновый pull: ошибка: ${String(e)}`)
+    }
+  })()
 }
 
 export type EditMode = "view" | "edit"

@@ -153,6 +153,14 @@ pub fn is_git_repo(folder: String) -> bool {
     Path::new(&folder).join(".git").exists()
 }
 
+/// Фоновый `git pull --ff-only` при открытии проекта: рабочая область
+/// открывается не дожидаясь сети, пришедшие изменения фронтенд перечитает
+/// после завершения. Результат — в журнал (run_git).
+#[tauri::command]
+pub async fn git_pull_only(folder: String) -> Result<(), String> {
+    blocking(move || run_git_ok(&["-C", &folder, "pull", "--ff-only"])).await
+}
+
 /// Первый запуск / смена папки:
 ///  - если git-репо → git pull (host git);
 ///  - создать служебные папки (.dictionary, _template, .tmp) + .gitignore + дефолтные справочники.
@@ -165,11 +173,6 @@ fn init_project_blocking(folder: String) -> Result<(), String> {
     let root = Path::new(&folder);
     fs::create_dir_all(root).map_err(|e| e.to_string())?;
     logging::log("app", &format!("инициализация проекта {folder}"));
-
-    // git pull, если это репо (ошибки — не критично: может не быть remote)
-    if root.join(".git").exists() {
-        let _ = run_git(&["-C", &folder, "pull", "--ff-only"]);
-    }
 
     // служебные папки
     for d in [".dictionary", "_template", ".tmp"] {
