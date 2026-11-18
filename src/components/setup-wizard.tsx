@@ -72,7 +72,7 @@ export function SetupWizard() {
     setSaving(true)
     try {
       await completeSetup(
-        source.folder.trim(),
+        (checked?.folder || source.folder).trim(),
         name.trim(),
         email.trim(),
         isRepo ? branch : null,

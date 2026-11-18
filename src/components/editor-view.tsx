@@ -36,6 +36,8 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  RefreshCw,
+  Trash2,
 } from "lucide-react"
 import { FrontmatterForm } from "@/components/frontmatter-form"
 import { MarkdownEditor } from "@/components/markdown-editor"
@@ -65,6 +67,9 @@ export function EditorView() {
   const setEditMode = useStore((s) => s.setEditMode)
   const closeEditor = useStore((s) => s.closeEditor)
   const openFile = useStore((s) => s.openFile)
+  const sync = useStore((s) => s.sync)
+  const syncing = useStore((s) => s.syncing)
+  const removeFile = useStore((s) => s.removeFile)
   const repoFiles = useStore((s) => s.repoFiles)
   const writeDictionary = useStore((s) => s.writeDictionary)
   const dictionaries = React.useMemo(
@@ -81,6 +86,8 @@ export function EditorView() {
 
   const editable = !!activeFile && isEditable(activeFile, editing.mode)
   const numberLocked = !!activeFile && !isTmpFile(activeFile)
+  // Удаление — только несинхронизированный черновик (.tmp не попадает в git).
+  const canDelete = !!activeFile && isTmpFile(activeFile)
 
   const folderFiles = React.useMemo(
     () => (editing.number ? files.filter((f) => f.number === editing.number) : []),
@@ -115,6 +122,7 @@ export function EditorView() {
   const [fmOpen, setFmOpen] = React.useState(() => activeFile?.dirty ?? false)
   const [alertOpen, setAlertOpen] = React.useState(false)
   const [missing, setMissing] = React.useState<string[]>([])
+  const [deleteOpen, setDeleteOpen] = React.useState(false)
 
   // (Ре)загрузка локального состояния при смене файла.
   React.useEffect(() => {
@@ -205,7 +213,6 @@ export function EditorView() {
       dirty: true,
     }
     await upsertFile(next)
-    openFile(activeFile.id)
   }
 
   async function doSave() {
@@ -213,6 +220,8 @@ export function EditorView() {
     const wasTemp = activeFile.fileName.startsWith(".tmp/")
     const fileName = wasTemp ? "localization.md" : activeFile.fileName
     await fileToFolder()
+    // После сохранения возвращаемся в рабочую область.
+    closeEditor()
     toast({
       title: wasTemp ? "Сохранено в базу знаний" : "Локализация сохранена",
       description: `${fm.number}/${fileName}`,
@@ -263,6 +272,55 @@ export function EditorView() {
       window.removeEventListener("spas:save", onSave)
     }
   }, [fm, body, attachments])
+
+  /** Синхронизация из редактора — тот же сценарий, что из шапки/футера. */
+  async function handleSync() {
+    await sync()
+    const msg = useStore.getState().lastCommitMessage
+    toast({ title: "Синхронизировано", description: msg ?? "Нет изменений для отправки" })
+  }
+
+  /** Удаление черновика доступно только для несинхронизированных (.tmp):
+   *  сохранённая локализация не удаляется из редактора. */
+  async function handleDelete() {
+    if (!activeFile) return
+    const deleted = activeFile
+    setDeleteOpen(false)
+    await removeFile(deleted.id)
+    closeEditor()
+    toast({ title: "Черновик удалён", description: deleted.fileName })
+  }
+
+  /** Одинаковый набор кнопок сверху и снизу: Сохранить, Синхронизировать, Удалить.
+   *  Удалить — только у черновика (в .tmp, никогда не синхронизируется). */
+  function renderActions() {
+    return (
+      <>
+        {editable && (
+          <Button size="sm" onClick={handleSaveClick}>
+            <Save className="size-4" />
+            Сохранить
+            <span className="ml-1 hidden text-xs opacity-70 sm:inline">Ctrl+S</span>
+          </Button>
+        )}
+        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+          <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
+          Синхронизировать
+        </Button>
+        {canDelete && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="size-4" />
+            Удалить
+          </Button>
+        )}
+      </>
+    )
+  }
 
   function handleAddProduct(p: string) {
     const cur = readDictionaries(useStore.getState().repoFiles).product
@@ -351,13 +409,7 @@ export function EditorView() {
               Отмена
             </Button>
           )}
-          {editable && (
-            <Button size="sm" onClick={handleSaveClick}>
-              <Save className="size-4" />
-              Сохранить
-              <span className="ml-1 hidden text-xs opacity-70 sm:inline">Ctrl+S</span>
-            </Button>
-          )}
+          {renderActions()}
         </div>
       </div>
 
@@ -462,6 +514,36 @@ export function EditorView() {
           </CollapsibleContent>
         </Card>
       </Collapsible>
+
+      {/* Нижний набор кнопок — дублирует верхний: Сохранить, Синхронизировать, Удалить */}
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
+        {renderActions()}
+      </div>
+
+      {/* Диалог удаления черновика */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="size-5 text-destructive" />
+              Удалить черновик?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Черновик {activeFile?.fileName} будет удалён без возможности
+              восстановления. После удаления откроется рабочая область.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Диалог валидации */}
       <AlertDialog open={alertOpen} onOpenChange={setAlertOpen}>

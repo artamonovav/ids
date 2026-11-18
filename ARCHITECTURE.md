@@ -60,12 +60,16 @@ graph TD
         WORK[WorkspaceView<br/>список локализаций: Последние/Черновики/Все]
         EDITOR[EditorView<br/>форма + редактор + исходник]
         SETTINGS[SettingsView<br/>профиль, папка проекта, справочники, шаблон]
+        LOGS[LogsView<br/>журнал: работа + git, выгрузка]
+        TUI[TuiView<br/>TUI-вид рабочей области: j/k/Enter, gauges]
     end
 
     APP --> SETUP
     APP --> WORK
     APP --> EDITOR
     APP --> SETTINGS
+    APP --> LOGS
+    APP --> TUI
 
     subgraph "EditorView internals"
         FM[FrontmatterForm<br/>13 полей, теги, селекты]
@@ -107,7 +111,7 @@ oklch() не поддерживается WebKit2GTK. Inline-скрипт в `in
 
 Маршрутизация — через Zustand state `view`:
 ```
-view: "setup" | "workspace" | "editor" | "settings"
+view: "setup" | "workspace" | "editor" | "settings" | "logs" | "tui"
 ```
 
 `AppShell` рендерит компонент по `view`. Переходы:
@@ -174,7 +178,7 @@ interface State {
 
   // Actions
   init: () => Promise<void>
-  prepareRepo: (url, folder) => Promise<{ isRepo, branches }>  // clone или проверка папки
+  prepareRepo: (url, folder) => Promise<{ isRepo, branches, folder }>          // clone или проверка папки
   applyProject: (folder, branch | null) => Promise<void>       // checkout + загрузка проекта
   completeSetup: (folder, name, email, branch) => Promise<void>
   createDraft: () => Promise<string>
@@ -389,16 +393,21 @@ graph TB
 | `**жирный**`, `*курсив*`, `~~зачёркнутый~~` | маркеры скрыты, текст оформлен | разметка видна |
 | `` `код` `` | обратные кавычки скрыты | разметка видна |
 | `[текст](url)` | скобки и URL скрыты, текст — ссылкой | разметка видна |
-| `![alt](attachments/...)` | картинка из вложений | Markdown-исходник |
+| `![alt](attachments/...)` | картинка из вложений (клик → предпросмотр) | Markdown-исходник |
 | `- [ ]` / `- [x]` | чекбокс, клик переключает | скобки видны |
+| GFM-таблицы | отрисованы виджетом (курсор внутри → исходник) | видны |
 | блоки ``` | фон и моноширинный шрифт | маркеры видны |
+| ```diff | строки `+`/`-`/`@@` подсвечены зелёным/красным/синим | маркеры видны |
 
 Режимы: **Live** (по умолчанию при редактировании), **Исходник** (тот же CodeMirror
 без декораций), **Совмещённо** (исходник + `react-markdown`) и **Просмотр**.
 Экземпляр CodeMirror создаётся один раз, а его DOM переносится между вкладками,
 поэтому undo/redo и позиция курсора сохраняются при переключении режимов.
-Таблицы и произвольный HTML в Live показываются как исходный текст — это осознанное
-ограничение первого этапа.
+
+Производительность Live: инлайн-декорации строятся только для видимой области
+(`view.visibleRanges`, пересчёт при скролле через `viewportChanged`), состояние
+code-fence трекается по всему документу — см. нюанс ниже. Произвольный HTML
+в Live показывается как исходный текст — это осознанное ограничение.
 
 ---
 
@@ -448,13 +457,16 @@ sequenceDiagram
 | `write_attachment` | `base, path, data_url` | `()` | `writeLoc()` (binary) |
 | `delete_file` | `base, path` | `()` | `patchFile()` (old .tmp) |
 | `git_sync` | `base, commit_message, author...` | `()` | `sync()` |
-| `git_clone` | `url, folder` | `()` | `prepareRepo()` (пустая папка) |
+| `git_clone` | `url, folder` | `Option<String>` — фактическая папка | `prepareRepo()` (непустая папка → подпапка `<папка>/<имя-репо>`) |
 | `git_branches` | `folder` | `Vec<String>` | `prepareRepo()` |
 | `git_checkout_pull` | `folder, branch` | `()` | `applyProject()` |
 | `git_identity` | `folder` | `{name, email}` | `loadProject()` |
 | `git_set_identity` | `folder, name, email, global` | `()` | `saveGitIdentity()` |
 | `read_app_config` | — | `Option<String>` | `init()`, `loadConfig()` |
 | `write_app_config` | `content` | `()` | `writeConfig()` |
+| `read_logs` | — | `String` | `LogsView` (журнал) |
+| `export_logs` | `path` | `()` | `LogsView` (выгрузка) |
+| `log_event` | `kind, message` | `()` | `logWork()` (store) |
 
 Команды, которые ходят в сеть (`init_project`, `git_sync`, `git_branches`, `git_clone`,
 `git_checkout_pull`), — `async` и выполняются в фоновом потоке (`blocking()`): синхронная
@@ -840,6 +852,74 @@ graph TB
 ```
 
 WebKit2GTK на Linux не экспонирует image как `File` item в `clipboardData`. Tauri clipboard-manager плагин (arboard под капотом) читает системный буфер напрямую. RGBA → PNG через canvas.
+
+## 5. Сглаживание шрифта (Linux WebKit2GTK)
+
+```mermaid
+graph LR
+    TYPE[Ввод текста в редакторе]
+    SUBPIX[subpixel antialiasing]
+    FLICKER[текст мерцает: жирный ↔ нормальный]
+    FIX[grayscale: -webkit-font-smoothing:antialiased<br/>+ text-rendering:optimizeSpeed]
+
+    TYPE --> SUBPIX --> FLICKER
+    FIX -.->|textarea и CodeMirror| OK2[ok]
+```
+
+Subpixel antialiasing в WebKit2GTK вызывает мерцание веса текста при наборе.
+Фикс (grayscale AA + `optimizeSpeed`) применяется в двух местах: `TEXTAREA_CLASS`
+в `markdown-editor.tsx` (readOnly-исходник) и тема `markdownEditorTheme` в
+`markdown-live-preview.ts` (Live/Исходник — основная поверхность ввода).
+
+## 6. Журнал работы и git
+
+```mermaid
+graph LR
+    GIT[git-команды<br/>run_git в commands.rs]
+    APP[события store<br/>invoke log_event]
+    FILE[(config_dir/ids/app.log<br/>ротация 4МБ → app.log.1)]
+    VIEW[LogsView<br/>вкладки Работа/Git]
+
+    GIT -->|kind git| FILE
+    APP -->|kind app| FILE
+    FILE -->|read_logs| VIEW
+    VIEW -->|export_logs + save-диалог| OUT[txt-файл у пользователя]
+```
+
+Единый журнал в `<config_dir>/ids/app.log`, строки `YYYY-MM-DD HH:MM:SS.mmm [kind] message`
+(kind = `app` | `git`). Git-команды журналируются автоматически хелпером
+`run_git` (строка запуска + код выхода + stderr при ошибке; одиночные
+`git config user.name/email` в `git_identity` не логируются — exit 1 при
+незаданном значении создавал бы шум). События уровня пользователя (черновики,
+сохранение, синхронизация) присылает store через `log_event`. Раздел «Журнал»
+в шапке — только просмотр с фильтром по вкладкам и кнопкой выгрузки в txt.
+
+## 7. TUI-раздел (TuiView)
+
+Раздел «TUI» в шапке — вид рабочей области в эстетике opencode/btop, но не
+терминал: те же store-действия, что у обычных вью.
+
+```mermaid
+graph LR
+    KEY[клавиатура<br/>j/k/g/G/Enter/n/s//q/Esc]
+    LIST[список локализаций<br/>моно-шрифт, панели с бордерами]
+    GAUGE[ASCII-gauges<br/>СИНХР [████░░] 80%]
+    ACT[действия store<br/>openFolder/createDraft/sync]
+
+    KEY --> ACT
+    ACT --> LIST
+    FILES[store files] --> LIST
+    FILES --> GAUGE
+```
+
+- Шапка: путь проекта (~-сокращение) + статус синхронизации.
+- Панель индикаторов: локализаций / черновиков / ASCII-gauge
+  синхронизации / продуктов в справочнике.
+- Вкладки «Локализации» / «Черновики», фильтр по `/`, сортировка как в «Все».
+- Клавиатура: `j/k` (стрелки тоже), `g/G` — начало/конец, `Enter` — открыть
+  (карточку или черновик), `n` — новый черновик, `s` — синхронизация,
+  `/` — фильтр, `Esc`/`q` — выход в рабочую область. Мышь: клик — выбор,
+  двойной клик — открыть; выбранная строка автоскроллится в зону видимости.
 
 ---
 

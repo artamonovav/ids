@@ -102,4 +102,4 @@ export interface Draft {
   savedAt: number
 }
 
-export type View = "workspace" | "editor" | "settings" | "setup"
+export type View = "workspace" | "editor" | "settings" | "setup" | "logs" | "tui"

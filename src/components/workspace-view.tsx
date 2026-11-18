@@ -130,7 +130,12 @@ export function WorkspaceView() {
     if (mode === "recent") {
       return [...folders].sort((a, b) => b.updatedAt - a.updatedAt)
     }
-    return folders
+    // «Все»: от самых новых к самым старым — по номеру дефекта по убыванию
+    // (большие SPAS выше; при равенстве — по времени обновления).
+    const num = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0
+    return [...folders].sort(
+      (a, b) => num(b.number) - num(a.number) || b.updatedAt - a.updatedAt
+    )
   }, [folders, mode])
 
   const filteredFolders = React.useMemo(
@@ -307,6 +312,11 @@ export function WorkspaceView() {
                             {t.frontmatter.type && TYPE_BADGE[t.frontmatter.type] && (
                               <Badge variant={TYPE_BADGE[t.frontmatter.type]}>{t.frontmatter.type}</Badge>
                             )}
+                            {t.frontmatter.product.map((p) => (
+                              <Badge key={p} variant="secondary" className="font-mono text-[11px]">
+                                {p}
+                              </Badge>
+                            ))}
                             {dirty && (
                               <span
                                 className="size-2 rounded-full bg-amber-500"
@@ -367,6 +377,11 @@ export function WorkspaceView() {
                             <Badge variant="outline">{fm.type}</Badge>
                           )}
                           <Badge variant="outline">{fm.environment}</Badge>
+                          {fm.product.map((p) => (
+                            <Badge key={p} variant="secondary" className="font-mono text-[11px]">
+                              {p}
+                            </Badge>
+                          ))}
                           {fm.flaky === "Да" && (
                             <Badge variant="outline" className="text-amber-600 dark:text-amber-400">
                               Плавающая

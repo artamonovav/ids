@@ -6,11 +6,13 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 use std::time::SystemTime;
 use tauri::Manager;
 use serde::Serialize;
 use base64::{Engine as _, prelude::BASE64_STANDARD};
+
+use crate::logging;
 
 #[derive(Serialize, Clone)]
 pub struct FileEntry {
@@ -55,6 +57,43 @@ fn git_command(args: &[&str]) -> Command {
         cmd.creation_flags(0x08000000);
     }
     cmd
+}
+
+/// Выполнить git-команду и записать её в журнал: строка запуска + код выхода
+/// (+ stderr одной строкой при ошибке). Используется всеми значимыми git-вызовами;
+/// одиночные `git config user.name/email` читаются напрямую (git_identity) —
+/// exit 1 при незаданном значении создавал бы шум в логе.
+fn run_git(args: &[&str]) -> Result<Output, String> {
+    let cmd_line = format!("git {}", args.join(" "));
+    let out = git_command(args).output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        logging::log("git", &format!("{cmd_line} → exit 0"));
+    } else {
+        let code = out.status.code().unwrap_or(-1);
+        let err: String = String::from_utf8_lossy(&out.stderr)
+            .trim()
+            .replace('\n', " | ")
+            .chars()
+            .take(300)
+            .collect();
+        let suffix = if err.is_empty() {
+            String::new()
+        } else {
+            format!(": {err}")
+        };
+        logging::log("git", &format!("{cmd_line} → exit {code}{suffix}"));
+    }
+    Ok(out)
+}
+
+/// Успешная git-команда, чей вывод не нужен; ошибка → Err(stderr).
+fn run_git_ok(args: &[&str]) -> Result<(), String> {
+    let out = run_git(args)?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
 }
 
 /// Путь внутри папки проекта. Разрешены только обычные компоненты:
@@ -125,10 +164,11 @@ pub async fn init_project(folder: String) -> Result<(), String> {
 fn init_project_blocking(folder: String) -> Result<(), String> {
     let root = Path::new(&folder);
     fs::create_dir_all(root).map_err(|e| e.to_string())?;
+    logging::log("app", &format!("инициализация проекта {folder}"));
 
     // git pull, если это репо (ошибки — не критично: может не быть remote)
     if root.join(".git").exists() {
-        let _ = git_command(&["-C", &folder, "pull", "--ff-only"]).status();
+        let _ = run_git(&["-C", &folder, "pull", "--ff-only"]);
     }
 
     // служебные папки
@@ -240,12 +280,16 @@ pub fn write_file(base: String, path: String, content: String) -> Result<(), Str
     if let Some(parent) = p.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::write(p, content).map_err(|e| e.to_string())
+    fs::write(p, content).map_err(|e| e.to_string())?;
+    logging::log("app", &format!("записан файл {path}"));
+    Ok(())
 }
 
 #[tauri::command]
 pub fn delete_file(base: String, path: String) -> Result<(), String> {
-    fs::remove_file(join(&base, &path)?).map_err(|e| e.to_string())
+    fs::remove_file(join(&base, &path)?).map_err(|e| e.to_string())?;
+    logging::log("app", &format!("удалён файл {path}"));
+    Ok(())
 }
 
 #[tauri::command]
@@ -255,7 +299,9 @@ pub fn rename_file(base: String, from: String, to: String) -> Result<(), String>
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    fs::rename(src, dst).map_err(|e| e.to_string())
+    fs::rename(src, dst).map_err(|e| e.to_string())?;
+    logging::log("app", &format!("переименован файл {from} → {to}"));
+    Ok(())
 }
 
 /// Записать вложение (изображение/файл) на диск — base64 → бинарный файл.
@@ -268,7 +314,9 @@ pub fn write_attachment(base: String, path: String, data_url: String) -> Result<
     // strip "data:...;base64," prefix
     let b64 = data_url.split(',').nth(1).unwrap_or(&data_url);
     let bytes = BASE64_STANDARD.decode(b64).map_err(|e| e.to_string())?;
-    fs::write(p, bytes).map_err(|e| e.to_string())
+    fs::write(p, bytes).map_err(|e| e.to_string())?;
+    logging::log("app", &format!("записано вложение {path}"));
+    Ok(())
 }
 
 /// Прочитать все вложения локализации (из <base>/<number>/attachments/)
@@ -319,12 +367,13 @@ pub async fn git_sync(base: String, commit_message: String, author_name: String,
 fn git_sync_blocking(base: String, commit_message: String, author_name: String, author_email: String) -> Result<(), String> {
     let author = format!("{} <{}>", author_name, author_email);
     let run = |args: &[&str]| -> Result<(), String> {
-        let out = git_command(args).output().map_err(|e| e.to_string())?;
-        if out.status.success() {
-            Ok(())
-        } else {
-            Err(String::from_utf8_lossy(&out.stderr).to_string())
-        }
+        run_git(args).and_then(|out| {
+            if out.status.success() {
+                Ok(())
+            } else {
+                Err(String::from_utf8_lossy(&out.stderr).to_string())
+            }
+        })
     };
     // Сначала тянем изменения с сервера (rebase — локальные поверх удалённых)
     let _ = run(&["-C", &base, "pull", "--rebase"]); // нет сети/remote — не критично, продолжим
@@ -344,12 +393,10 @@ fn git_branches_blocking(folder: String) -> Result<Vec<String>, String> {
     // Fetch remote-веток (для multi-user — актуальный список с сервера).
     // --prune: удалить умершие remote-tracking ветки. Ошибки fetch не критичны
     // (нет сети/remote — продолжаем с локальными ветками).
-    let _ = git_command(&["-C", &folder, "fetch", "--all", "--prune"]).output();
+    let _ = run_git(&["-C", &folder, "fetch", "--all", "--prune"]);
 
     // Локальные ветки
-    let local_out = git_command(&["-C", &folder, "branch", "--list", "--format=%(refname:short)"])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let local_out = run_git(&["-C", &folder, "branch", "--list", "--format=%(refname:short)"])?;
     let mut branches: Vec<String> = if local_out.status.success() {
         String::from_utf8_lossy(&local_out.stdout)
             .lines()
@@ -362,9 +409,7 @@ fn git_branches_blocking(folder: String) -> Result<Vec<String>, String> {
 
     // Remote-ветки (origin/xxx) — strip префикса origin/, фильтр HEAD.
     // git checkout <name> (DWIM) создаёт локальную tracking-ветку из origin/<name>.
-    let remote_out = git_command(&["-C", &folder, "branch", "-r", "--format=%(refname:short)"])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let remote_out = run_git(&["-C", &folder, "branch", "-r", "--format=%(refname:short)"])?;
     if remote_out.status.success() {
         for line in String::from_utf8_lossy(&remote_out.stdout).lines() {
             let s = line.trim();
@@ -394,39 +439,63 @@ fn git_checkout_pull_blocking(folder: String, branch: String) -> Result<(), Stri
     if branch.is_empty() || branch.starts_with('-') {
         return Err(format!("недопустимое имя ветки: {branch}"));
     }
-    let run = |args: &[&str]| -> Result<(), String> {
-        let out = git_command(args).output().map_err(|e| e.to_string())?;
-        if out.status.success() {
-            Ok(())
-        } else {
-            Err(String::from_utf8_lossy(&out.stderr).to_string())
-        }
-    };
+    let run = |args: &[&str]| -> Result<(), String> { run_git_ok(args) };
     run(&["-C", &folder, "checkout", &branch])?;
     run(&["-C", &folder, "pull", "--ff-only"])?;
     Ok(())
 }
 
-/// Клонирование репозитория в пустую папку (или в ещё не существующую).
+/// Имя репозитория из ссылки: `git@host:org/ids-kb.git` и
+/// `https://host/org/ids-kb.git` → `ids-kb`. Как git при `clone url`
+/// без явной папки.
+fn repo_name_from_url(url: &str) -> String {
+    let trimmed = url.trim().trim_end_matches('/');
+    let tail = trimmed.rsplit(|c: char| c == '/' || c == ':').next().unwrap_or("");
+    let name = tail.strip_suffix(".git").unwrap_or(tail);
+    name.trim().to_string()
+}
+
+/// Клонирование репозитория. Поведение как у `git clone url`:
+/// - папка не существует или пуста → клон в неё;
+/// - папка не пуста (например, выбрали ~/prj) → клон в подпапку
+///   `<папка>/<имя-репо>`, если такая подпапка не занята.
+/// Возвращает фактическую папку репозитория (None — клонировали в `folder`).
 #[tauri::command]
-pub async fn git_clone(url: String, folder: String) -> Result<(), String> {
+pub async fn git_clone(url: String, folder: String) -> Result<Option<String>, String> {
     blocking(move || {
         let url = url.trim().to_string();
         if url.is_empty() || url.starts_with('-') {
             return Err(format!("недопустимый адрес репозитория: {url}"));
         }
         let target = Path::new(&folder);
+        let mut dest = folder.clone();
         if target.exists() {
-            let mut entries = fs::read_dir(target).map_err(|e| e.to_string())?;
-            if entries.next().is_some() {
-                return Err("папка не пуста: выберите пустую папку или существующий репозиторий".into());
+            let entries = fs::read_dir(target).map_err(|e| e.to_string())?;
+            if entries.count() > 0 {
+                let name = repo_name_from_url(&url);
+                if name.is_empty() {
+                    return Err("не удалось определить имя репозитория из ссылки".into());
+                }
+                let sub = target.join(&name);
+                if sub.exists() {
+                    let sub_entries = fs::read_dir(&sub).map_err(|e| e.to_string())?;
+                    if sub_entries.count() > 0 {
+                        return Err(format!(
+                            "папка не пуста, и подпапка {} тоже занята: выберите пустую папку или существующий репозиторий",
+                            sub.display()
+                        ));
+                    }
+                }
+                dest = sub.to_string_lossy().to_string();
             }
         }
-        let out = git_command(&["clone", "--", &url, &folder])
-            .output()
-            .map_err(|e| e.to_string())?;
+        let out = run_git(&["clone", "--", &url, &dest])?;
         if out.status.success() {
-            Ok(())
+            if dest == folder {
+                Ok(None)
+            } else {
+                Ok(Some(dest))
+            }
         } else {
             Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
         }
@@ -472,11 +541,12 @@ pub fn git_set_identity(folder: String, name: String, email: String, global: boo
         }
         args.push(key);
         args.push(value);
-        let out = git_command(&args).output().map_err(|e| e.to_string())?;
-        if !out.status.success() {
-            return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
-        }
+        run_git_ok(&args)?;
     }
+    logging::log(
+        "app",
+        &format!("задана git-идентичность: {} <{}> ({})", name, email, if global { "глобально" } else { "локально" }),
+    );
     Ok(())
 }
 
@@ -502,7 +572,30 @@ pub fn read_app_config(app: tauri::AppHandle) -> Result<Option<String>, String> 
 #[tauri::command]
 pub fn write_app_config(app: tauri::AppHandle, content: String) -> Result<(), String> {
     let p = app_config_file(&app)?;
-    fs::write(p, content).map_err(|e| e.to_string())
+    fs::write(p, content).map_err(|e| e.to_string())?;
+    logging::log("app", "сохранены настройки (config.yaml)");
+    Ok(())
+}
+
+// --- Журнал (лог работы + лог git) ---
+
+/// Полный текст журнала: <config_dir>/ids/app.log.
+#[tauri::command]
+pub fn read_logs() -> String {
+    logging::read()
+}
+
+/// Выгрузить журнал в файл, выбранный пользователем (диалог сохранения).
+#[tauri::command]
+pub fn export_logs(path: String) -> Result<(), String> {
+    logging::export(&path)
+}
+
+/// Событие работы приложения от фронтенда (store.ts): создание/сохранение
+/// черновиков, синхронизация и т.д.
+#[tauri::command]
+pub fn log_event(kind: String, message: String) {
+    logging::log(&kind, &message);
 }
 
 #[cfg(test)]

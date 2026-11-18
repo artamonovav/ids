@@ -17,6 +17,8 @@ import {
 import {
   LayoutGrid,
   Settings as SettingsIcon,
+  ScrollText,
+  SquareTerminal,
   Sun,
   Moon,
   Monitor,
@@ -30,10 +32,13 @@ import {
 import { WorkspaceView } from "@/components/workspace-view"
 import { EditorView } from "@/components/editor-view"
 import { SettingsView } from "@/components/settings-view"
+import { LogsView } from "@/components/logs-view"
+import { TuiView } from "@/components/tui-view"
 import { SetupWizard } from "@/components/setup-wizard"
 import { GitIdentityDialog } from "@/components/git-identity-dialog"
 import { cn } from "@/lib/utils"
 import { getVersion } from "@tauri-apps/api/app"
+import { openUrl } from "@tauri-apps/plugin-opener"
 
 function ThemeMenu() {
   const { theme, resolvedTheme, setTheme } = useTheme()
@@ -122,6 +127,7 @@ export function AppShell() {
   const setView = useStore((s) => s.setView)
   const sync = useStore((s) => s.sync)
   const syncing = useStore((s) => s.syncing)
+  const update = useStore((s) => s.update)
   const editingActive = useStore((s) => {
     if (s.view !== "editor" || !s.editing.fileId) return false
     const f = s.files.find((x) => x.id === s.editing.fileId)
@@ -130,6 +136,23 @@ export function AppShell() {
   const { toast } = useToast()
   const [version, setVersion] = React.useState("")
   React.useEffect(() => { getVersion().then(setVersion).catch(() => {}) }, [])
+
+  // Автопроверка обновлений — один раз при запуске, тихо (ошибки не мешают).
+  React.useEffect(() => {
+    if (!setupComplete) return
+    useStore
+      .getState()
+      .checkUpdate(true)
+      .then((info) => {
+        if (info) {
+          toast({
+            title: "Доступна новая версия IDS",
+            description: `v${info.latest} — текущая v${version || "?"}. Страница релизов — в настройках.`,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [setupComplete, toast])
 
   async function handleSync() {
     await sync()
@@ -170,6 +193,22 @@ export function AppShell() {
               <SettingsIcon className="size-4" />
               <span className="hidden sm:inline">Настройки</span>
             </Button>
+            <Button
+              variant={view === "logs" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setView("logs")}
+            >
+              <ScrollText className="size-4" />
+              <span className="hidden sm:inline">Журнал</span>
+            </Button>
+            <Button
+              variant={view === "tui" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setView("tui")}
+            >
+              <SquareTerminal className="size-4" />
+              <span className="hidden md:inline">TUI</span>
+            </Button>
             <ThemeMenu />
           </nav>
         </div>
@@ -179,12 +218,31 @@ export function AppShell() {
         {view === "workspace" && <WorkspaceView />}
         {view === "editor" && <EditorView />}
         {view === "settings" && <SettingsView />}
+        {view === "logs" && <LogsView />}
+        {view === "tui" && <TuiView />}
       </main>
 
       <footer className="sticky bottom-0 z-40 border-t bg-background">
         <div className="mx-auto flex h-10 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
           <StatusPill />
-          {version && <span className="text-xs text-muted-foreground">v{version}</span>}
+          {version && (
+            <span
+              className={`text-xs ${
+                update
+                  ? "cursor-pointer font-medium text-amber-600 dark:text-amber-400"
+                  : "text-muted-foreground"
+              }`}
+              title={
+                update
+                  ? `Доступна версия ${update.latest} — открыть страницу релизов`
+                  : undefined
+              }
+              onClick={() => update && openUrl(update.url).catch(() => {})}
+            >
+              v{version}
+              {update ? ` → ${update.latest}` : ""}
+            </span>
+          )}
           <div className="flex items-center gap-3">
             {editingActive && (
               <Button

@@ -2,6 +2,9 @@ import * as React from 'react'
 import type { ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
+import rehypeHighlight from 'rehype-highlight'
+import type { PluggableList } from 'unified'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import {
   Bold,
@@ -35,6 +38,12 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -50,6 +59,7 @@ import {
   type EditResult,
   type FormatAction,
 } from '@/lib/markdown-format'
+import { remarkAlerts } from '@/lib/remark-alerts'
 import {
   livePreview,
   markdownEditorTheme,
@@ -76,7 +86,31 @@ const EDITOR_HEIGHT = 'h-[70vh]'
 const TEXTAREA_CLASS =
   'font-mono text-sm w-full h-full min-h-[70vh] resize-none overflow-y-auto field-sizing-fixed rounded-md border bg-transparent p-3 outline-none focus-visible:ring-[3px] [-webkit-font-smoothing:antialiased] [text-rendering:optimizeSpeed]'
 
-const REMARK_PLUGINS = [remarkGfm]
+const REMARK_PLUGINS = [remarkGfm, remarkAlerts, remarkBreaks]
+
+// Подсветка синтаксиса кода в Просмотре/Совмещённо — ограниченный набор
+// языков (полный common из highlight.js слишком раздувает бандл).
+// diff не подключаем: такие блоки красит собственный DiffCode.
+import yaml from 'highlight.js/lib/languages/yaml'
+import bash from 'highlight.js/lib/languages/bash'
+import shell from 'highlight.js/lib/languages/shell'
+import json from 'highlight.js/lib/languages/json'
+import javascript from 'highlight.js/lib/languages/javascript'
+import typescript from 'highlight.js/lib/languages/typescript'
+import python from 'highlight.js/lib/languages/python'
+import sql from 'highlight.js/lib/languages/sql'
+import xml from 'highlight.js/lib/languages/xml'
+import java from 'highlight.js/lib/languages/java'
+
+const REHYPE_PLUGINS: PluggableList = [
+  [
+    rehypeHighlight,
+    {
+      detect: false,
+      languages: { yaml, bash, shell, json, javascript, typescript, python, sql, xml, java },
+    },
+  ],
+]
 
 /** Подсветка синтаксиса Markdown в режиме «Исходник». */
 const MD_HIGHLIGHT = HighlightStyle.define([
@@ -120,6 +154,43 @@ interface MdComponentProps {
   src?: string
   alt?: string
   href?: string
+}
+
+// --- diff-блоки (```diff): подсветка добавленного/удалённого в Просмотре ---
+
+/** Вытащить текст из дерева react-markdown (строки/элементы/массивы). */
+function reactNodeText(node: ReactNode): string {
+  if (typeof node === 'string') return node
+  if (typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(reactNodeText).join('')
+  if (React.isValidElement(node)) {
+    return reactNodeText((node.props as { children?: ReactNode }).children)
+  }
+  return ''
+}
+
+function diffLineClass(line: string): string {
+  if (line.startsWith('@@')) return 'md-diff-hunk'
+  if (line.startsWith('+') && !line.startsWith('+++')) return 'md-diff-add'
+  if (line.startsWith('-') && !line.startsWith('---')) return 'md-diff-del'
+  return ''
+}
+
+/** Код-блок с языком diff/patch: каждая строка — цветная (как в VSCode/GitHub). */
+function DiffCode({ text }: { text: string }) {
+  const lines = text.replace(/\n$/, '').split('\n')
+  return (
+    <code className="font-mono text-sm">
+      {lines.map((line, i) => {
+        const cls = diffLineClass(line)
+        return (
+          <span key={i} className={`block${cls ? ` ${cls}` : ''}`}>
+            {line.length > 0 ? line : ' '}
+          </span>
+        )
+      })}
+    </code>
+  )
 }
 
 /** Имя для нового файла-изображения: image-YYYY-MM-DD-HH-MM-<rand>.png */
@@ -225,6 +296,11 @@ export function MarkdownEditor({
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [mode, setMode] = React.useState<Mode>(initialMode)
   const live = mode === 'live'
+  // Клик по картинке в Live → полноразмерный предпросмотр в диалоге.
+  const [imagePreview, setImagePreview] = React.useState<{
+    src: string
+    alt: string
+  } | null>(null)
 
   // CodeMirror создаётся один раз, а его DOM переносится между вкладками —
   // так сохраняются undo/redo и позиция курсора при переключении режимов.
@@ -510,6 +586,7 @@ export function MarkdownEditor({
       return true
     },
     resolveImageSrc,
+    onImageClick: (src: string, alt: string) => setImagePreview({ src, alt }),
   })
   handlersRef.current = {
     change: onChange,
@@ -521,6 +598,7 @@ export function MarkdownEditor({
       return true
     },
     resolveImageSrc,
+    onImageClick: (src: string, alt: string) => setImagePreview({ src, alt }),
   }
 
   // Создание CodeMirror. StrictMode в dev монтирует/размонтирует дважды —
@@ -545,7 +623,10 @@ export function MarkdownEditor({
       }),
       liveCompartment.of(
         liveRef.current
-          ? livePreview(() => handlersRef.current.resolveImageSrc)
+          ? livePreview({
+              resolveImageSrc: () => handlersRef.current.resolveImageSrc,
+              onImageClick: (src, alt) => handlersRef.current.onImageClick(src, alt),
+            })
           : [],
       ),
       EditorView.domEventHandlers({
@@ -604,7 +685,12 @@ export function MarkdownEditor({
     if (!view) return
     view.dispatch({
       effects: liveCompartment.reconfigure(
-        live ? livePreview(() => handlersRef.current.resolveImageSrc) : [],
+        live
+          ? livePreview({
+              resolveImageSrc: () => handlersRef.current.resolveImageSrc,
+              onImageClick: (src, alt) => handlersRef.current.onImageClick(src, alt),
+            })
+          : [],
       ),
     })
     // Смена шрифта Live ↔ Исходник меняет метрики — пересчитываем раскладку.
@@ -634,11 +720,20 @@ export function MarkdownEditor({
       li: ({ children }: MdComponentProps) => (
         <li className="ml-2">{children}</li>
       ),
-      blockquote: ({ children }: MdComponentProps) => (
-        <blockquote className="border-l-4 pl-3 italic text-muted-foreground my-2">
-          {children}
-        </blockquote>
-      ),
+      blockquote: ({ children, node }: MdComponentProps) => {
+        // GitHub-алерты: `> [!NOTE]` и т.п. → data-alert ставит remark-плагин
+        // remark-alerts (маркер [!X] уже вырезан).
+        const props = (node as { properties?: Record<string, unknown> }) ?? {}
+        const alert = props.properties?.dataAlert as string | undefined
+        if (alert) {
+          return <blockquote className={`md-alert md-alert-${alert}`}>{children}</blockquote>
+        }
+        return (
+          <blockquote className="border-l-4 pl-3 italic text-muted-foreground my-2">
+            {children}
+          </blockquote>
+        )
+      },
       a: ({ children, href }: MdComponentProps) => (
         <a
           href={href}
@@ -667,11 +762,25 @@ export function MarkdownEditor({
           className="max-w-full rounded-md my-2 border"
         />
       ),
-      pre: ({ children }: MdComponentProps) => (
-        <pre className="bg-muted rounded-md p-3 overflow-x-auto my-2">
-          {children}
-        </pre>
-      ),
+      pre: ({ children }: MdComponentProps) => {
+        // Блок diff (```diff) — построчная цветовая индикация.
+        const child = Array.isArray(children) ? children[0] : children
+        if (React.isValidElement(child)) {
+          const props = child.props as { className?: string; children?: ReactNode }
+          if (/language-(diff|patch)/.test(props.className ?? '')) {
+            return (
+              <pre className="bg-muted rounded-md p-3 overflow-x-auto my-2">
+                <DiffCode text={reactNodeText(props.children)} />
+              </pre>
+            )
+          }
+        }
+        return (
+          <pre className="bg-muted rounded-md p-3 overflow-x-auto my-2">
+            {children}
+          </pre>
+        )
+      },
       code: ({ children, className, node }: MdComponentProps) => {
         const isBlock =
           (typeof className === 'string' && className.includes('language-')) ||
@@ -709,7 +818,7 @@ export function MarkdownEditor({
 
   const renderPreview = () => (
     <div className="h-full overflow-y-auto rounded-md border bg-background p-4">
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={components}>
         {value}
       </ReactMarkdown>
     </div>
@@ -873,6 +982,24 @@ export function MarkdownEditor({
         </PanelGroup>
       ) : (
         <div className={EDITOR_HEIGHT}>{renderSourceEditor()}</div>
+      )}
+
+      {/* Предпросмотр картинки из Live-режима (клик по изображению) */}
+      {imagePreview && (
+        <Dialog open onOpenChange={(o) => !o && setImagePreview(null)}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle className="font-mono text-sm">
+                {imagePreview.alt || 'Просмотр изображения'}
+              </DialogTitle>
+            </DialogHeader>
+            <img
+              src={imagePreview.src}
+              alt={imagePreview.alt}
+              className="max-h-[75vh] w-full rounded-md object-contain"
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </Tabs>
   )

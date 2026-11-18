@@ -18,6 +18,9 @@ export interface RepoCheck {
   isRepo: boolean
   branches: string[]
   cloned: boolean
+  /** Фактическая папка репозитория: клонирование в непустую папку
+   *  создаёт подпапку <папка>/<имя-репо>, проект открывается по ней. */
+  folder: string
 }
 
 export function defaultBranch(branches: string[]): string {
@@ -63,7 +66,7 @@ export function useProjectSource(initialFolder = "") {
     setChecking(true)
     try {
       const result = await prepareRepo(url, dir)
-      setChecked({ ...result, cloned: cloning })
+      setChecked({ ...result, cloned: cloning, folder: result.folder || dir })
       if (cloning) {
         toast({ title: "Репозиторий склонирован", description: `Веток: ${result.branches.length}` })
       } else if (result.isRepo) {
@@ -113,7 +116,7 @@ export function ProjectSourceFields({
       </div>
       <div className="space-y-1">
         <Label htmlFor={`${idPrefix}-folder`}>
-          {cloning ? "Папка для клонирования (должна быть пустой)" : "Путь к папке проекта"}
+          {cloning ? "Папка для клонирования (в непустой папке создастся подпапка)" : "Путь к папке проекта"}
         </Label>
         <div className="flex gap-2">
           <Input
@@ -137,6 +140,9 @@ export function ProjectSourceFields({
         <p className="text-xs text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="mr-1 inline size-3.5" />
           {checked.cloned ? "Репозиторий склонирован" : "Git-репозиторий"}, веток: {checked.branches.length}
+          {checked.folder && checked.folder !== folder.trim() && (
+            <> · папка: <span className="font-mono">{checked.folder}</span></>
+          )}
         </p>
       )}
       {checked && !checked.isRepo && (

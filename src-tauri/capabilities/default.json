@@ -6,6 +6,8 @@
   "permissions": [
     "core:default",
     "clipboard-manager:allow-read-image",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "opener:allow-open-url"
   ]
 }

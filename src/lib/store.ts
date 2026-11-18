@@ -4,6 +4,7 @@
 
 import { create } from "zustand"
 import { invoke } from "@tauri-apps/api/core"
+import { getVersion } from "@tauri-apps/api/app"
 import type { Localization, Settings, SyncStatus, View, DictName } from "./types"
 import { formatAuthor, commitMessageFor, serializeDocument, parseFrontmatter } from "./frontmatter"
 import {
@@ -19,6 +20,7 @@ import {
   type UserConfig,
 } from "./repo"
 import { EMPTY_FRONTMATTER, TEMPLATE_BODY } from "./template"
+import { fetchLatestRelease, type UpdateInfo } from "./update"
 
 // UUID polyfill — crypto.randomUUID() может отсутствовать в старом WebKitGTK (Ubuntu 22.04)
 function uuid(): string {
@@ -55,6 +57,14 @@ async function loadAttachmentsFor(number: string, fileId: string) {
       ),
     }))
   } catch { /* папки attachments/ нет или ошибка — оставляем [] */ }
+}
+
+/** Событие работы приложения в журнал (раздел «Журнал», вкладка «Работа»).
+ *  Файловые операции и git-команды журналируются в Rust автоматически;
+ *  здесь — события уровня пользователя. Ошибки invoke глушим: журнал
+ *  не должен ломать основной сценарий. */
+function logWork(message: string) {
+  void invoke("log_event", { kind: "app", message }).catch(() => {})
 }
 
 function parseFileEntries(entries: FileEntry[]): Localization[] {
@@ -199,6 +209,7 @@ async function loadProject(folder: string): Promise<void> {
     syncError: null,
     gitIdentityMissing,
   })
+  logWork(`открыт проект ${folder}`)
 }
 
 export type EditMode = "view" | "edit"
@@ -226,9 +237,14 @@ interface State {
   config: UserConfig
   /** В git папки проекта не задано имя или email — нужно запросить. */
   gitIdentityMissing: boolean
+  /** Доступна новая версия (GitHub Releases); null — актуальная/не проверяли. */
+  update: UpdateInfo | null
 
   init: () => Promise<void>
-  prepareRepo: (url: string, folder: string) => Promise<{ isRepo: boolean; branches: string[] }>
+  /** Проверить обновления (GitHub Releases). silent=true — автопроверка
+   *  при запуске: ошибки глушатся. silent=false — ручная: ошибки пробрасываются. */
+  checkUpdate: (silent?: boolean) => Promise<UpdateInfo | null>
+  prepareRepo: (url: string, folder: string) => Promise<{ isRepo: boolean; branches: string[]; folder: string }>
   applyProject: (folder: string, branch: string | null) => Promise<void>
   completeSetup: (folder: string, name: string, email: string, branch: string | null) => Promise<void>
   /** Сбросить папку проекта и вернуть мастер; профиль остаётся в конфиге. */
@@ -266,6 +282,7 @@ export const useStore = create<State>()((set, get) => ({
   lastCommitMessage: null,
   config: DEFAULT_USER_CONFIG,
   gitIdentityMissing: false,
+  update: null,
 
   init: async () => {
     try {
@@ -285,10 +302,16 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   prepareRepo: async (url, folder) => {
-    if (url.trim()) await invoke("git_clone", { url: url.trim(), folder })
-    const isRepo = await invoke<boolean>("is_git_repo", { folder })
-    const branches = isRepo ? await invoke<string[]>("git_branches", { folder }) : []
-    return { isRepo, branches }
+    let target = folder
+    if (url.trim()) {
+      // git_clone при непустой папке клонирует в подпапку <папка>/<имя-репо>
+      // и возвращает её — проверка веток и открытие проекта идут по ней.
+      const actual = await invoke<string | null>("git_clone", { url: url.trim(), folder })
+      if (actual) target = actual
+    }
+    const isRepo = await invoke<boolean>("is_git_repo", { folder: target })
+    const branches = isRepo ? await invoke<string[]>("git_branches", { folder: target }) : []
+    return { isRepo, branches, folder: target }
   },
 
   applyProject: async (folder, branch) => {
@@ -329,6 +352,19 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   dismissGitIdentity: () => set({ gitIdentityMissing: false }),
+
+  checkUpdate: async (silent = true) => {
+    const version = await getVersion().catch(() => "")
+    if (!version) return null
+    try {
+      const info = await fetchLatestRelease(version)
+      set({ update: info })
+      return info
+    } catch (e) {
+      if (silent) return null
+      throw e
+    }
+  },
 
   setView: (v) => set({ view: v }),
   openFolder: async (number) => {
@@ -373,6 +409,7 @@ export const useStore = create<State>()((set, get) => ({
       syncStatus: "yellow",
     }))
     await writeLoc(base, file)
+    logWork(`создан черновик ${fileName}`)
     return id
   },
 
@@ -394,6 +431,9 @@ export const useStore = create<State>()((set, get) => ({
       for (const att of file.attachments) {
         try { await invoke("delete_file", { base, path: `.tmp/${att.path}` }) } catch { /* gone */ }
       }
+      logWork(`сохранена локализация ${file.number}/${file.fileName}`)
+    } else {
+      logWork(`сохранена локализация ${file.number || "черновик"}/${file.fileName}`)
     }
   },
 
@@ -426,7 +466,10 @@ export const useStore = create<State>()((set, get) => ({
       const path = pathFor(f)
       if (path) { try { await invoke("delete_file", { base, path }) } catch {} }
     }
-    set((s) => ({ files: s.files.filter((x) => x.id !== id), syncStatus: "yellow" }))
+    set((s) => ({
+      files: s.files.filter((x) => x.id !== id), syncStatus: "yellow"
+    }))
+    if (f) logWork(`удалён черновик ${f.number || ""}${f.number ? "/" : ""}${f.fileName}`)
   },
 
   removeFolderDrafts: async (number) => {
@@ -472,6 +515,7 @@ export const useStore = create<State>()((set, get) => ({
       syncStatus: "yellow",
     }))
     await writeLoc(base, file)
+    logWork(`создано уточнение ${file.number}/${file.fileName}`)
     return id
   },
 
@@ -480,6 +524,7 @@ export const useStore = create<State>()((set, get) => ({
     const content = serializeDictYaml(values)
     set((s) => ({ repoFiles: { ...s.repoFiles, [DICT_FILES[name]]: content }, syncStatus: "yellow" }))
     await invoke("write_file", { base, path: DICT_FILES[name], content })
+    logWork(`справочник ${name} обновлён`)
   },
 
   writeTemplateFile: async (content) => {
@@ -535,8 +580,10 @@ export const useStore = create<State>()((set, get) => ({
         }),
         lastCommitMessage: commitMessage,
       }))
+      logWork(`синхронизация выполнена (${commitMessage})`)
     } catch (e) {
       set({ syncing: false, syncStatus: "red", syncError: String(e) })
+      logWork(`ошибка синхронизации: ${String(e)}`)
     }
   },
 

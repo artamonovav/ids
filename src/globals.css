@@ -46,37 +46,39 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Светлая тема по умолчанию (Tailwind zinc). Только hex: WebKit2GTK
+     не понимает oklch() — с oklch все переменные невалидны и тема «ломается». */
+  --background: #ffffff;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #a1a1aa;
+  --chart-1: #ea580c;
+  --chart-2: #0d9488;
+  --chart-3: #0369a1;
+  --chart-4: #eab308;
+  --chart-5: #fb923c;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #09090b;
+  --sidebar-primary: #18181b;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #a1a1aa;
 }
 
 /* Darcula — мягкая тёмная тема (как IntelliJ IDEA Darcula).
@@ -149,6 +151,11 @@
   --sidebar-accent-foreground: #1f2328;
   --sidebar-border: #d0d7de;
   --sidebar-ring: #0969da;
+  --chart-1: #0969da;
+  --chart-2: #1a7f37;
+  --chart-3: #8250df;
+  --chart-4: #bc4c00;
+  --chart-5: #cf222e;
 }
 
 /* GitHub — тёмная */
@@ -179,6 +186,11 @@
   --sidebar-accent-foreground: #e6edf3;
   --sidebar-border: #30363d;
   --sidebar-ring: #1f6feb;
+  --chart-1: #4493f8;
+  --chart-2: #3fb950;
+  --chart-3: #ab7df8;
+  --chart-4: #f0883e;
+  --chart-5: #f85149;
 }
 
 /* Nord — светлая (Snow Storm) */
@@ -209,6 +221,11 @@
   --sidebar-accent-foreground: #2e3440;
   --sidebar-border: #d8dee9;
   --sidebar-ring: #4c6f99;
+  --chart-1: #5e81ac;
+  --chart-2: #a3be8c;
+  --chart-3: #ebcb8b;
+  --chart-4: #b48ead;
+  --chart-5: #bf616a;
 }
 
 /* Nord — тёмная (Polar Night) */
@@ -239,6 +256,11 @@
   --sidebar-accent-foreground: #eceff4;
   --sidebar-border: #434c5e;
   --sidebar-ring: #88c0d0;
+  --chart-1: #88c0d0;
+  --chart-2: #a3be8c;
+  --chart-3: #ebcb8b;
+  --chart-4: #b48ead;
+  --chart-5: #bf616a;
 }
 
 /* Catppuccin — светлая (Latte) */
@@ -269,6 +291,11 @@
   --sidebar-accent-foreground: #4c4f69;
   --sidebar-border: #bcc0cc;
   --sidebar-ring: #1e66f5;
+  --chart-1: #1e66f5;
+  --chart-2: #40a02b;
+  --chart-3: #df8e1d;
+  --chart-4: #8839ef;
+  --chart-5: #d20f39;
 }
 
 /* Catppuccin — тёмная (Mocha) */
@@ -299,6 +326,11 @@
   --sidebar-accent-foreground: #cdd6f4;
   --sidebar-border: #313244;
   --sidebar-ring: #89b4fa;
+  --chart-1: #89b4fa;
+  --chart-2: #a6e3a1;
+  --chart-3: #f9e2af;
+  --chart-4: #cba6f7;
+  --chart-5: #f38ba8;
 }
 
 /* Solarized — светлая */
@@ -329,6 +361,11 @@
   --sidebar-accent-foreground: #586e75;
   --sidebar-border: #ddd6c1;
   --sidebar-ring: #1f6fa8;
+  --chart-1: #268bd2;
+  --chart-2: #859900;
+  --chart-3: #b58900;
+  --chart-4: #d33682;
+  --chart-5: #cb4b16;
 }
 
 /* Solarized — тёмная */
@@ -359,6 +396,291 @@
   --sidebar-accent-foreground: #93a1a1;
   --sidebar-border: #134e5a;
   --sidebar-ring: #3a9bd9;
+  --chart-1: #268bd2;
+  --chart-2: #859900;
+  --chart-3: #b58900;
+  --chart-4: #d33682;
+  --chart-5: #cb4b16;
+}
+
+/* Dracula — светлая (официальной светлой нет; светло-дрекула на цветах палитры) */
+[data-palette="dracula"]:not(.dark) {
+  --background: #ffffff;
+  --foreground: #282a36;
+  --card: #f8f8f2;
+  --card-foreground: #282a36;
+  --popover: #f8f8f2;
+  --popover-foreground: #282a36;
+  --primary: #7c3aed;
+  --primary-foreground: #ffffff;
+  --secondary: #ececf4;
+  --secondary-foreground: #282a36;
+  --muted: #ececf4;
+  --muted-foreground: #6272a4;
+  --accent: #ececf4;
+  --accent-foreground: #282a36;
+  --destructive: #dc356e;
+  --border: #d5d5dc;
+  --input: #d5d5dc;
+  --ring: #7c3aed;
+  --sidebar: #f0f0f6;
+  --sidebar-foreground: #282a36;
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4e4ec;
+  --sidebar-accent-foreground: #282a36;
+  --sidebar-border: #d5d5dc;
+  --sidebar-ring: #7c3aed;
+  --chart-1: #7c3aed;
+  --chart-2: #10b161;
+  --chart-3: #f1b505;
+  --chart-4: #ff79c6;
+  --chart-5: #d1345b;
+}
+
+/* Dracula — тёмная (каноничная) */
+.dark[data-palette="dracula"] {
+  --background: #282a36;
+  --foreground: #f8f8f2;
+  --card: #2f3140;
+  --card-foreground: #f8f8f2;
+  --popover: #2f3140;
+  --popover-foreground: #f8f8f2;
+  --primary: #bd93f9;
+  --primary-foreground: #282a36;
+  --secondary: #44475a;
+  --secondary-foreground: #f8f8f2;
+  --muted: #44475a;
+  --muted-foreground: #9aa5ce;
+  --accent: #44475a;
+  --accent-foreground: #f8f8f2;
+  --destructive: #ff5555;
+  --border: #44475a;
+  --input: #44475a;
+  --ring: #bd93f9;
+  --sidebar: #21232d;
+  --sidebar-foreground: #f8f8f2;
+  --sidebar-primary: #bd93f9;
+  --sidebar-primary-foreground: #282a36;
+  --sidebar-accent: #44475a;
+  --sidebar-accent-foreground: #f8f8f2;
+  --sidebar-border: #44475a;
+  --sidebar-ring: #bd93f9;
+  --chart-1: #bd93f9;
+  --chart-2: #50fa7b;
+  --chart-3: #f1fa8c;
+  --chart-4: #ff79c6;
+  --chart-5: #8be9fd;
+}
+
+/* Tokyo Night — светлая (Day) */
+[data-palette="tokyo-night"]:not(.dark) {
+  --background: #e1e2e7;
+  --foreground: #3760bf;
+  --card: #f3f4f8;
+  --card-foreground: #3760bf;
+  --popover: #f3f4f8;
+  --popover-foreground: #3760bf;
+  --primary: #2e7de9;
+  --primary-foreground: #e1e2e7;
+  --secondary: #c4c8da;
+  --secondary-foreground: #3760bf;
+  --muted: #c4c8da;
+  --muted-foreground: #6172b0;
+  --accent: #c4c8da;
+  --accent-foreground: #3760bf;
+  --destructive: #f76e6e;
+  --border: #a8b2d3;
+  --input: #a8b2d3;
+  --ring: #2e7de9;
+  --sidebar: #d8dae5;
+  --sidebar-foreground: #3760bf;
+  --sidebar-primary: #2e7de9;
+  --sidebar-primary-foreground: #e1e2e7;
+  --sidebar-accent: #c4c8da;
+  --sidebar-accent-foreground: #3760bf;
+  --sidebar-border: #a8b2d3;
+  --sidebar-ring: #2e7de9;
+  --chart-1: #2e7de9;
+  --chart-2: #587539;
+  --chart-3: #8c6c3e;
+  --chart-4: #985f7d;
+  --chart-5: #b15c79;
+}
+
+/* Tokyo Night — тёмная (Night) */
+.dark[data-palette="tokyo-night"] {
+  --background: #1a1b26;
+  --foreground: #c0caf5;
+  --card: #16161e;
+  --card-foreground: #c0caf5;
+  --popover: #16161e;
+  --popover-foreground: #c0caf5;
+  --primary: #7aa2f7;
+  --primary-foreground: #1a1b26;
+  --secondary: #292e42;
+  --secondary-foreground: #c0caf5;
+  --muted: #292e42;
+  --muted-foreground: #565f89;
+  --accent: #292e42;
+  --accent-foreground: #c0caf5;
+  --destructive: #f7768e;
+  --border: #3b4261;
+  --input: #3b4261;
+  --ring: #7aa2f7;
+  --sidebar: #16161e;
+  --sidebar-foreground: #c0caf5;
+  --sidebar-primary: #7aa2f7;
+  --sidebar-primary-foreground: #1a1b26;
+  --sidebar-accent: #292e42;
+  --sidebar-accent-foreground: #c0caf5;
+  --sidebar-border: #3b4261;
+  --sidebar-ring: #7aa2f7;
+  --chart-1: #7aa2f7;
+  --chart-2: #9ece6a;
+  --chart-3: #e0af68;
+  --chart-4: #bb9af7;
+  --chart-5: #f7768e;
+}
+
+/* Rosé Pine — светлая (Dawn) */
+[data-palette="rose-pine"]:not(.dark) {
+  --background: #faf4ed;
+  --foreground: #575279;
+  --card: #fffaf3;
+  --card-foreground: #575279;
+  --popover: #fffaf3;
+  --popover-foreground: #575279;
+  --primary: #907aa9;
+  --primary-foreground: #fffaf3;
+  --secondary: #f2e9e1;
+  --secondary-foreground: #575279;
+  --muted: #f2e9e1;
+  --muted-foreground: #9893a5;
+  --accent: #f2e9e1;
+  --accent-foreground: #575279;
+  --destructive: #b4637a;
+  --border: #e5dfdb;
+  --input: #e5dfdb;
+  --ring: #907aa9;
+  --sidebar: #f2e9e1;
+  --sidebar-foreground: #575279;
+  --sidebar-primary: #907aa9;
+  --sidebar-primary-foreground: #fffaf3;
+  --sidebar-accent: #f2e9e1;
+  --sidebar-accent-foreground: #575279;
+  --sidebar-border: #e5dfdb;
+  --sidebar-ring: #907aa9;
+  --chart-1: #286983;
+  --chart-2: #ea9d34;
+  --chart-3: #d7827e;
+  --chart-4: #907aa9;
+  --chart-5: #56949f;
+}
+
+/* Rosé Pine — тёмная (Main) */
+.dark[data-palette="rose-pine"] {
+  --background: #191724;
+  --foreground: #e0def4;
+  --card: #1f1d2e;
+  --card-foreground: #e0def4;
+  --popover: #1f1d2e;
+  --popover-foreground: #e0def4;
+  --primary: #c4a7e7;
+  --primary-foreground: #191724;
+  --secondary: #26233a;
+  --secondary-foreground: #e0def4;
+  --muted: #26233a;
+  --muted-foreground: #908caa;
+  --accent: #26233a;
+  --accent-foreground: #e0def4;
+  --destructive: #eb6f92;
+  --border: #2f2b44;
+  --input: #2f2b44;
+  --ring: #c4a7e7;
+  --sidebar: #14121f;
+  --sidebar-foreground: #e0def4;
+  --sidebar-primary: #c4a7e7;
+  --sidebar-primary-foreground: #191724;
+  --sidebar-accent: #26233a;
+  --sidebar-accent-foreground: #e0def4;
+  --sidebar-border: #2f2b44;
+  --sidebar-ring: #c4a7e7;
+  --chart-1: #31748f;
+  --chart-2: #f6c177;
+  --chart-3: #ebbcba;
+  --chart-4: #c4a7e7;
+  --chart-5: #eb6f92;
+}
+
+/* Gruvbox — светлая (light hard → soft; базовая light) */
+[data-palette="gruvbox"]:not(.dark) {
+  --background: #fbf1c7;
+  --foreground: #3c3836;
+  --card: #fbf1c7;
+  --card-foreground: #3c3836;
+  --popover: #fbf1c7;
+  --popover-foreground: #3c3836;
+  --primary: #076678;
+  --primary-foreground: #fbf1c7;
+  --secondary: #ebdbb2;
+  --secondary-foreground: #3c3836;
+  --muted: #ebdbb2;
+  --muted-foreground: #7c6f64;
+  --accent: #ebdbb2;
+  --accent-foreground: #3c3836;
+  --destructive: #9d0006;
+  --border: #d5c4a1;
+  --input: #d5c4a1;
+  --ring: #076678;
+  --sidebar: #eee8d5;
+  --sidebar-foreground: #3c3836;
+  --sidebar-primary: #076678;
+  --sidebar-primary-foreground: #fbf1c7;
+  --sidebar-accent: #ebdbb2;
+  --sidebar-accent-foreground: #3c3836;
+  --sidebar-border: #d5c4a1;
+  --sidebar-ring: #076678;
+  --chart-1: #076678;
+  --chart-2: #79740e;
+  --chart-3: #b57614;
+  --chart-4: #8f3f71;
+  --chart-5: #9d0006;
+}
+
+/* Gruvbox — тёмная (dark medium) */
+.dark[data-palette="gruvbox"] {
+  --background: #282828;
+  --foreground: #ebdbb2;
+  --card: #32302f;
+  --card-foreground: #ebdbb2;
+  --popover: #32302f;
+  --popover-foreground: #ebdbb2;
+  --primary: #83a598;
+  --primary-foreground: #282828;
+  --secondary: #3c3836;
+  --secondary-foreground: #ebdbb2;
+  --muted: #3c3836;
+  --muted-foreground: #928374;
+  --accent: #3c3836;
+  --accent-foreground: #ebdbb2;
+  --destructive: #fb4934;
+  --border: #504945;
+  --input: #504945;
+  --ring: #83a598;
+  --sidebar: #1d2021;
+  --sidebar-foreground: #ebdbb2;
+  --sidebar-primary: #83a598;
+  --sidebar-primary-foreground: #282828;
+  --sidebar-accent: #3c3836;
+  --sidebar-accent-foreground: #ebdbb2;
+  --sidebar-border: #504945;
+  --sidebar-ring: #83a598;
+  --chart-1: #83a598;
+  --chart-2: #b8bb26;
+  --chart-3: #fabd2f;
+  --chart-4: #d3869b;
+  --chart-5: #8ec07c;
 }
 
 @layer base {
@@ -369,6 +691,99 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Подсветка diff-блоков (```diff) в стиле VSCode/GitHub: зелёный — добавлено,
+   красный — удалено, синий — заголовок hunk (@@). Переменные общие для Live
+   (декорации CodeMirror) и «Просмотра» (react-markdown), зависят от темы. */
+:root {
+  --diff-add-fg: #1a7f37;
+  --diff-add-bg: rgba(46, 160, 67, 0.12);
+  --diff-del-fg: #cf222e;
+  --diff-del-bg: rgba(248, 81, 73, 0.12);
+  --diff-hunk-fg: #0550ae;
+}
+.dark {
+  --diff-add-fg: #3fb950;
+  --diff-add-bg: rgba(46, 160, 67, 0.16);
+  --diff-del-fg: #f85149;
+  --diff-del-bg: rgba(248, 81, 73, 0.16);
+  --diff-hunk-fg: #58a6ff;
+}
+.md-diff-add {
+  color: var(--diff-add-fg);
+  background: var(--diff-add-bg);
+}
+.md-diff-del {
+  color: var(--diff-del-fg);
+  background: var(--diff-del-bg);
+}
+.md-diff-hunk {
+  color: var(--diff-hunk-fg);
+}
+
+/* GitHub-алерты (> [!NOTE] и т.п.) в «Просмотре» и Live */
+:root {
+  --alert-note-fg: #0969da;
+  --alert-note-bg: rgba(9, 105, 218, 0.08);
+  --alert-tip-fg: #1a7f37;
+  --alert-tip-bg: rgba(31, 136, 59, 0.08);
+  --alert-important-fg: #8250df;
+  --alert-important-bg: rgba(137, 87, 229, 0.08);
+  --alert-warning-fg: #9a6700;
+  --alert-warning-bg: rgba(158, 116, 7, 0.1);
+  --alert-caution-fg: #cf222e;
+  --alert-caution-bg: rgba(248, 81, 73, 0.08);
+}
+.dark {
+  --alert-note-fg: #4493f8;
+  --alert-note-bg: rgba(68, 147, 248, 0.1);
+  --alert-tip-fg: #3fb950;
+  --alert-tip-bg: rgba(63, 185, 80, 0.1);
+  --alert-important-fg: #ab7df8;
+  --alert-important-bg: rgba(171, 125, 248, 0.1);
+  --alert-warning-fg: #d29922;
+  --alert-warning-bg: rgba(210, 153, 34, 0.12);
+  --alert-caution-fg: #f85149;
+  --alert-caution-bg: rgba(248, 81, 73, 0.12);
+}
+.md-alert {
+  border-left: 4px solid;
+  padding: 0.25rem 0.75rem;
+  margin: 0.5rem 0;
+}
+.md-alert::before {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85em;
+  margin-bottom: 0.25rem;
+}
+.md-alert-note { border-left-color: var(--alert-note-fg); background: var(--alert-note-bg); }
+.md-alert-note::before { content: "Note"; color: var(--alert-note-fg); }
+.md-alert-tip { border-left-color: var(--alert-tip-fg); background: var(--alert-tip-bg); }
+.md-alert-tip::before { content: "Tip"; color: var(--alert-tip-fg); }
+.md-alert-important { border-left-color: var(--alert-important-fg); background: var(--alert-important-bg); }
+.md-alert-important::before { content: "Important"; color: var(--alert-important-fg); }
+.md-alert-warning { border-left-color: var(--alert-warning-fg); background: var(--alert-warning-bg); }
+.md-alert-warning::before { content: "Warning"; color: var(--alert-warning-fg); }
+.md-alert-caution { border-left-color: var(--alert-caution-fg); background: var(--alert-caution-bg); }
+.md-alert-caution::before { content: "Caution"; color: var(--alert-caution-fg); }
+
+/* Подсветка синтаксиса кода (rehype-highlight): минимум токенов, GitHub-подобно */
+.hljs { color: var(--foreground); }
+.hljs-comment, .hljs-quote { color: #6e7781; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section, .hljs-doctag, .hljs-name { color: #cf222e; }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { color: #0a3069; }
+.hljs-number, .hljs-builtin, .hljs-type, .hljs-template-variable, .hljs-selector-attr, .hljs-selector-pseudo { color: #0550ae; }
+.hljs-title, .hljs-title.class_, .hljs-title.function_, .hljs-attr, .hljs-selector-id, .hljs-selector-class { color: #8250df; }
+.hljs-variable, .hljs-params, .hljs-meta, .hljs-symbol, .hljs-bullet { color: #953800; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+.dark .hljs-comment, .dark .hljs-quote { color: #8b949e; }
+.dark .hljs-keyword, .dark .hljs-selector-tag, .dark .hljs-literal, .dark .hljs-section, .dark .hljs-doctag, .dark .hljs-name { color: #ff7b72; }
+.dark .hljs-string, .dark .hljs-regexp, .dark .hljs-addition, .dark .hljs-attribute, .dark .hljs-meta .hljs-string { color: #a5d6ff; }
+.dark .hljs-number, .dark .hljs-builtin, .dark .hljs-type, .dark .hljs-template-variable, .dark .hljs-selector-attr, .dark .hljs-selector-pseudo { color: #79c0ff; }
+.dark .hljs-title, .dark .hljs-title.class_, .dark .hljs-title.function_, .dark .hljs-attr, .dark .hljs-selector-id, .dark .hljs-selector-class { color: #d2a8ff; }
+.dark .hljs-variable, .dark .hljs-params, .dark .hljs-meta, .dark .hljs-symbol, .dark .hljs-bullet { color: #ffa657; }
 
 /* CodeMirror: в режиме «Исходник» — моноширинный шрифт, в Live — системный. */
 .ids-md-source .cm-editor .cm-scroller {

@@ -15,6 +15,10 @@ export const PALETTES: Palette[] = [
   { id: 'nord', name: 'Nord' },
   { id: 'catppuccin', name: 'Catppuccin' },
   { id: 'solarized', name: 'Solarized' },
+  { id: 'dracula', name: 'Dracula' },
+  { id: 'tokyo-night', name: 'Tokyo Night' },
+  { id: 'rose-pine', name: 'Rosé Pine' },
+  { id: 'gruvbox', name: 'Gruvbox' },
 ]
 
 export const PALETTE_STORAGE_KEY = 'ids-palette'

@@ -26,7 +26,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { ArrowLeft, Plus, X, Save, GitBranch, RotateCcw } from "lucide-react"
+import { ArrowLeft, Plus, X, Save, GitBranch, RotateCcw, CheckCircle2, Download, ExternalLink } from "lucide-react"
+import { openUrl } from "@tauri-apps/plugin-opener"
+import { getVersion } from "@tauri-apps/api/app"
 import {
   BranchSelect,
   ProjectSourceFields,
@@ -143,10 +145,39 @@ export function SettingsView() {
   const setOffline = useStore((s) => s.setOffline)
   const applyProject = useStore((s) => s.applyProject)
   const resetSetup = useStore((s) => s.resetSetup)
+  const update = useStore((s) => s.update)
+  const checkUpdate = useStore((s) => s.checkUpdate)
   const { toast } = useToast()
   const source = useProjectSource(base)
   const [branch, setBranch] = React.useState("")
   const [switching, setSwitching] = React.useState(false)
+  const [appVersion, setAppVersion] = React.useState("")
+  const [checkingUpdate, setCheckingUpdate] = React.useState(false)
+  React.useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {})
+  }, [])
+
+  async function handleCheckUpdate() {
+    setCheckingUpdate(true)
+    try {
+      const info = await checkUpdate(false)
+      if (info) {
+        toast({
+          title: `Доступна версия ${info.latest}`,
+          description: "Откройте страницу релизов для скачивания.",
+        })
+      } else {
+        toast({ title: "У вас актуальная версия IDS" })
+      }
+    } catch (e) {
+      toast({
+        title: "Не удалось проверить обновления",
+        description: String(e),
+        variant: "destructive",
+      })
+    }
+    setCheckingUpdate(false)
+  }
 
   const dictionaries: Dictionaries = React.useMemo(
     () => readDictionaries(repoFiles),
@@ -187,7 +218,9 @@ export function SettingsView() {
   }
 
   async function handleSwitchProject() {
-    const folder = source.folder.trim()
+    // checked.folder — фактическая папка репозитория (клон в непустую папку
+    // создаёт подпапку); без клонирования совпадает с source.folder.
+    const folder = (checked?.folder || source.folder).trim()
     setSwitching(true)
     try {
       await applyProject(folder, isRepo ? branch : null)
@@ -358,6 +391,38 @@ export function SettingsView() {
             </div>
             <Switch checked={settings.offline} onCheckedChange={(v) => setOffline(v)} />
           </div>
+        </Section>
+
+        {/* Обновления */}
+        <Section
+          title="Обновления"
+          desc={`Установлена версия ${appVersion || "?"}. Проверка — через GitHub Releases.`}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleCheckUpdate} disabled={checkingUpdate}>
+              {checkingUpdate ? <RotateCcw className="size-4 animate-spin" /> : <Download className="size-4" />}
+              Проверить обновления
+            </Button>
+            {update && (
+              <Button size="sm" onClick={() => openUrl(update.url).catch(() => {})}>
+                <ExternalLink className="size-4" />
+                Открыть страницу релизов (v{update.latest})
+              </Button>
+            )}
+          </div>
+          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            {update ? (
+              <>
+                <Download className="size-3.5 text-amber-600 dark:text-amber-400" />
+                Доступна версия {update.latest} — ссылка также в футере приложения.
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                Актуальная версия, либо проверка ещё не выполнялась.
+              </>
+            )}
+          </p>
         </Section>
       </div>
 

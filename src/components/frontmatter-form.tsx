@@ -54,6 +54,22 @@ function opts(list: string[], current: string): string[] {
   return arr
 }
 
+/** Подсветить совпадение с запросом внутри подсказки (like search highlight). */
+function HighlightMatch({ text, term }: { text: string; term: string }) {
+  if (!term) return <>{text}</>
+  const idx = text.toLowerCase().indexOf(term)
+  if (idx < 0) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="rounded-sm bg-amber-200 px-0.5 text-foreground dark:bg-amber-400/30">
+        {text.slice(idx, idx + term.length)}
+      </span>
+      {text.slice(idx + term.length)}
+    </>
+  )
+}
+
 export function FrontmatterForm({
   value,
   onChange,
@@ -85,7 +101,13 @@ export function FrontmatterForm({
   )
   const removeProduct = (p: string) =>
     onChange({ product: value.product.filter((x) => x !== p) })
-  const productSuggestions = dictionaries.product.filter((p) => !value.product.includes(p)).sort((a, b) => a.localeCompare(b, "ru"))
+  // Подсказки: при пустом вводе — весь справочник (сортировка ru), по мере
+  // ввода — фильтрация по подстроке без учёта регистра; совпадение подсвечивается.
+  const productTerm = productInput.trim().toLowerCase()
+  const productSuggestions = dictionaries.product
+    .filter((p) => !value.product.includes(p))
+    .filter((p) => !productTerm || p.toLowerCase().includes(productTerm))
+    .sort((a, b) => a.localeCompare(b, "ru"))
 
   const addRelated = (raw: string) => {
     const v = raw.trim()
@@ -249,7 +271,7 @@ export function FrontmatterForm({
                 }}
                 className="cursor-pointer py-0 text-xs hover:bg-accent hover:text-accent-foreground aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
               >
-                + {p}
+                + <HighlightMatch text={p} term={productTerm} />
               </Badge>
             ))}
           </div>
