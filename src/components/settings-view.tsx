@@ -147,6 +147,7 @@ export function SettingsView() {
   const resetSetup = useStore((s) => s.resetSetup)
   const update = useStore((s) => s.update)
   const checkUpdate = useStore((s) => s.checkUpdate)
+  const setTuiMode = useStore((s) => s.setTuiMode)
   const { toast } = useToast()
   const source = useProjectSource(base)
   const [branch, setBranch] = React.useState("")
@@ -390,6 +391,21 @@ export function SettingsView() {
               <p className="text-[11px] text-muted-foreground">Сохранение локально с отложенной отправкой.</p>
             </div>
             <Switch checked={settings.offline} onCheckedChange={(v) => setOffline(v)} />
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">TUI-режим</p>
+              <p className="text-[11px] text-muted-foreground">
+                Терминальный вид всего приложения: моноширинный шрифт, без
+                скруглений. Рабочая область — клавиатурный список
+                (j/k · Enter · n · s · / · d — удаление черновика).
+              </p>
+            </div>
+            <Switch
+              checked={config.tuiMode}
+              onCheckedChange={(v) => setTuiMode(v)}
+            />
           </div>
         </Section>
 

@@ -23,6 +23,10 @@ export const PALETTES: Palette[] = [
 
 export const PALETTE_STORAGE_KEY = 'ids-palette'
 
+/** TUI-режим применяется до первой отрисовки из localStorage (config.yaml
+ *  грузится асинхронно и для этого поздно). Значение — зеркало config.tuiMode. */
+export const TUI_STORAGE_KEY = 'ids-tui'
+
 export function isPaletteId(id: string | null | undefined): boolean {
   return !!id && PALETTES.some((p) => p.id === id)
 }
@@ -42,4 +46,17 @@ export function applyPalette(id: string): void {
   const root = document.documentElement
   if (!id || id === 'default') root.removeAttribute('data-palette')
   else root.dataset.palette = id
+}
+
+/** Применить/снять TUI-режим (data-tui на <html>). */
+export function applyTuiMode(on: boolean): void {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  if (on) root.setAttribute('data-tui', '1')
+  else root.removeAttribute('data-tui')
+  try {
+    localStorage.setItem(TUI_STORAGE_KEY, on ? '1' : '0')
+  } catch {
+    /* нет localStorage — режим живёт до перезапуска */
+  }
 }

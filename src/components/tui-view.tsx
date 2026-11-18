@@ -6,6 +6,16 @@
 import * as React from "react"
 import { useStore, selectFolders } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import type { Localization } from "@/lib/types"
 
 type Tab = "kb" | "tmp"
@@ -79,6 +89,7 @@ export function TuiView() {
   const createDraft = useStore((s) => s.createDraft)
   const openFolder = useStore((s) => s.openFolder)
   const openFile = useStore((s) => s.openFile)
+  const removeFile = useStore((s) => s.removeFile)
   const setView = useStore((s) => s.setView)
   const { toast } = useToast()
 
@@ -86,6 +97,7 @@ export function TuiView() {
   const [q, setQ] = React.useState("")
   const [searchMode, setSearchMode] = React.useState(false)
   const [sel, setSel] = React.useState(0)
+  const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; name: string } | null>(null)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
 
@@ -194,12 +206,38 @@ export function TuiView() {
     if (item) item.open()
   }
 
+  /** Удаление черновика (клавиша d) — только вкладка «Черновики»,
+   *  только несинхронизированные .tmp; с подтверждением. */
+  function askDelete() {
+    if (tab !== "tmp") {
+      toast({
+        title: "Удаление доступно только для черновиков",
+        description: "Сохранённые локализации удаляются из редактора.",
+      })
+      return
+    }
+    const item = items[sel]
+    if (!item) return
+    const f = drafts.find((x) => x.id === item.id)
+    if (f) setDeleteTarget({ id: f.id, name: f.fileName })
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    await removeFile(deleteTarget.id)
+    toast({ title: "Черновик удалён", description: deleteTarget.name })
+    setDeleteTarget(null)
+    setSel((s) => Math.max(0, Math.min(s, items.length - 2)))
+  }
+
   // Клавиатура: j/k/g/G/Enter/n/s//q/Esc — как в opencode. Пока фокус в
   // поиске — буквы идут в поле, работают только Esc/Enter.
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const inInput = e.target instanceof HTMLInputElement
       if (inInput) return
+      // Диалог удаления открыт — клавиши списка не работают, Esc закрывает диалог сам.
+      if (deleteTarget) return
       const move = (delta: number) => {
         e.preventDefault()
         setSel((s) => Math.min(items.length - 1, Math.max(0, s + delta)))
@@ -228,6 +266,9 @@ export function TuiView() {
           e.preventDefault()
           void handleSync()
           return
+        case "d":
+          e.preventDefault()
+          return askDelete()
         case "/":
           e.preventDefault()
           setSearchMode(true)
@@ -382,11 +423,33 @@ export function TuiView() {
           <span><b className="text-foreground">Enter</b> открыть</span>
           <span><b className="text-foreground">n</b> новый</span>
           <span><b className="text-foreground">s</b> синк</span>
+          <span><b className="text-foreground">d</b> удалить (черновики)</span>
           <span><b className="text-foreground">/</b> поиск</span>
           <span><b className="text-foreground">q</b> выход</span>
         </div>
         <span>обновлено {fmtDate(Date.now())}</span>
       </div>
+
+      {/* Диалог удаления черновика */}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить черновик?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.name} будет удалён без возможности восстановления.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

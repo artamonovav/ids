@@ -21,6 +21,7 @@ import {
 } from "./repo"
 import { EMPTY_FRONTMATTER, TEMPLATE_BODY } from "./template"
 import { fetchLatestRelease, type UpdateInfo } from "./update"
+import { applyTuiMode } from "./theme"
 
 // UUID polyfill — crypto.randomUUID() может отсутствовать в старом WebKitGTK (Ubuntu 22.04)
 function uuid(): string {
@@ -210,6 +211,7 @@ async function loadProject(folder: string): Promise<void> {
     gitIdentityMissing,
   })
   logWork(`открыт проект ${folder}`)
+  applyTuiMode(config.tuiMode)
 
   // Фоновый pull: рабочая область уже открыта, сеть не задерживает старт.
   // После pull перечитываем диск — пришли ли изменения от других (multi-user).
@@ -277,6 +279,8 @@ interface State {
   resetSetup: () => Promise<void>
   saveGitIdentity: (name: string, email: string, global: boolean) => Promise<void>
   dismissGitIdentity: () => void
+  /** TUI-режим: терминальная эстетика на всё приложение (config.yaml). */
+  setTuiMode: (on: boolean) => Promise<void>
   setView: (v: View) => void
   openFolder: (number: string) => void
   openFile: (fileId: string) => void
@@ -378,6 +382,13 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   dismissGitIdentity: () => set({ gitIdentityMissing: false }),
+
+  setTuiMode: async (on) => {
+    const { config } = get()
+    await get().writeConfig({ ...config, tuiMode: on })
+    applyTuiMode(on)
+    logWork(`TUI-режим ${on ? "включён" : "выключен"}`)
+  },
 
   checkUpdate: async (silent = true) => {
     const version = await getVersion().catch(() => "")

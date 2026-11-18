@@ -57,11 +57,10 @@ graph TD
 
     subgraph "Views (switch by view state)"
         SETUP[SetupWizard<br/>первый запуск: папка→ветки→профиль]
-        WORK[WorkspaceView<br/>список локализаций: Последние/Черновики/Все]
+        WORK[WorkspaceView / TuiView<br/>список локализаций: обычный или TUI]
         EDITOR[EditorView<br/>форма + редактор + исходник]
         SETTINGS[SettingsView<br/>профиль, папка проекта, справочники, шаблон]
         LOGS[LogsView<br/>журнал: работа + git, выгрузка]
-        TUI[TuiView<br/>TUI-вид рабочей области: j/k/Enter, gauges]
     end
 
     APP --> SETUP
@@ -69,7 +68,6 @@ graph TD
     APP --> EDITOR
     APP --> SETTINGS
     APP --> LOGS
-    APP --> TUI
 
     subgraph "EditorView internals"
         FM[FrontmatterForm<br/>13 полей, теги, селекты]
@@ -111,8 +109,15 @@ oklch() не поддерживается WebKit2GTK. Inline-скрипт в `in
 
 Маршрутизация — через Zustand state `view`:
 ```
-view: "setup" | "workspace" | "editor" | "settings" | "logs" | "tui"
+view: "setup" | "workspace" | "editor" | "settings" | "logs"
 ```
+
+**TUI-режим** — не отдельный view, а переключатель в настройках
+(`config.tuiMode`, `data-tui` на `<html>`): рабочая область рендерит
+`TuiView` вместо `WorkspaceView`, всё приложение получает терминальный
+стиль (моноширинный шрифт, без скруглений/теней, плотнее). Для мигания
+без стилей при запуске режим зеркалируется в localStorage (`ids-tui`)
+и применяется до первой отрисовки (index.html).
 
 `AppShell` рендерит компонент по `view`. Переходы:
 - `setView("settings")` — кнопка шестерёнки в шапке
@@ -895,17 +900,21 @@ graph LR
 сохранение, синхронизация) присылает store через `log_event`. Раздел «Журнал»
 в шапке — только просмотр с фильтром по вкладкам и кнопкой выгрузки в txt.
 
-## 7. TUI-раздел (TuiView)
+## 7. TUI-режим (TuiView + data-tui)
 
-Раздел «TUI» в шапке — вид рабочей области в эстетике opencode/btop, но не
-терминал: те же store-действия, что у обычных вью.
+**Опция в настройках** («Режим работы» → TUI-режим), а не вкладка: включается
+на всё приложение. Рабочая область рендерит TuiView, весь UI получает
+терминальную эстетику через `html[data-tui]` CSS (моноширинный шрифт,
+`border-radius: 0`, без теней/блюра, базовый шрифт 14px — плотнее).
+Хранится в config.yaml (`tuiMode: true`), зеркалируется в localStorage
+для применения до первой отрисовки.
 
 ```mermaid
 graph LR
-    KEY[клавиатура<br/>j/k/g/G/Enter/n/s//q/Esc]
+    KEY[клавиатура<br/>j/k/g/G/Enter/n/s/d//q/Esc]
     LIST[список локализаций<br/>моно-шрифт, панели с бордерами]
     GAUGE[ASCII-gauges<br/>СИНХР [████░░] 80%]
-    ACT[действия store<br/>openFolder/createDraft/sync]
+    ACT[действия store<br/>openFolder/createDraft/sync/removeFile]
 
     KEY --> ACT
     ACT --> LIST
@@ -919,6 +928,7 @@ graph LR
 - Вкладки «Локализации» / «Черновики», фильтр по `/`, сортировка как в «Все».
 - Клавиатура: `j/k` (стрелки тоже), `g/G` — начало/конец, `Enter` — открыть
   (карточку или черновик), `n` — новый черновик, `s` — синхронизация,
+  `d` — удалить черновик (только вкладка «Черновики», с подтверждением),
   `/` — фильтр, `Esc`/`q` — выход в рабочую область. Мышь: клик — выбор,
   двойной клик — открыть; выбранная строка автоскроллится в зону видимости.
 

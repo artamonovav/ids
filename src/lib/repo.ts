@@ -37,12 +37,15 @@ export interface UserConfig {
   folder: string
   profile: { name: string; email: string; spaceCode?: string }
   recentLimit: number
+  /** TUI-режим: терминальная эстетика на всё приложение + клавиатурный список. */
+  tuiMode: boolean
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
   folder: "",
   profile: { name: "", email: "" },
   recentLimit: 3,
+  tuiMode: false,
 }
 
 function cfgQuote(s: string): string {
@@ -72,6 +75,7 @@ export function serializeConfig(c: UserConfig): string {
   L.push(`  email: ${cfgVal(c.profile.email)}`)
   if (c.profile.spaceCode) L.push(`  spaceCode: ${cfgVal(c.profile.spaceCode)}`)
   L.push(`recentLimit: ${c.recentLimit}`)
+  if (c.tuiMode) L.push("tuiMode: true")
   return L.join("\n") + "\n"
 }
 
@@ -80,6 +84,7 @@ export function parseConfig(content: string | undefined): UserConfig {
     folder: DEFAULT_USER_CONFIG.folder,
     profile: { ...DEFAULT_USER_CONFIG.profile },
     recentLimit: DEFAULT_USER_CONFIG.recentLimit,
+    tuiMode: DEFAULT_USER_CONFIG.tuiMode,
   }
   if (!content) return cfg
   for (const line of content.replace(/\r\n/g, "\n").split("\n")) {
@@ -92,6 +97,8 @@ export function parseConfig(content: string | undefined): UserConfig {
       cfg.folder = cfgUnquote(val)
     } else if (key === "recentLimit") {
       cfg.recentLimit = parseInt(cfgUnquote(val), 10) || 3
+    } else if (key === "tuiMode") {
+      cfg.tuiMode = val.trim() === "true"
     } else {
       ;(cfg.profile as Record<string, string>)[key] = cfgUnquote(val)
     }

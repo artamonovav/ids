@@ -18,7 +18,6 @@ import {
   LayoutGrid,
   Settings as SettingsIcon,
   ScrollText,
-  SquareTerminal,
   Sun,
   Moon,
   Monitor,
@@ -128,6 +127,7 @@ export function AppShell() {
   const sync = useStore((s) => s.sync)
   const syncing = useStore((s) => s.syncing)
   const update = useStore((s) => s.update)
+  const tuiMode = useStore((s) => s.config.tuiMode)
   const editingActive = useStore((s) => {
     if (s.view !== "editor" || !s.editing.fileId) return false
     const f = s.files.find((x) => x.id === s.editing.fileId)
@@ -201,25 +201,16 @@ export function AppShell() {
               <ScrollText className="size-4" />
               <span className="hidden sm:inline">Журнал</span>
             </Button>
-            <Button
-              variant={view === "tui" ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setView("tui")}
-            >
-              <SquareTerminal className="size-4" />
-              <span className="hidden md:inline">TUI</span>
-            </Button>
             <ThemeMenu />
           </nav>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6">
-        {view === "workspace" && <WorkspaceView />}
+        {view === "workspace" && (tuiMode ? <TuiView /> : <WorkspaceView />)}
         {view === "editor" && <EditorView />}
         {view === "settings" && <SettingsView />}
         {view === "logs" && <LogsView />}
-        {view === "tui" && <TuiView />}
       </main>
 
       <footer className="sticky bottom-0 z-40 border-t bg-background">

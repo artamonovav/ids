@@ -13,6 +13,10 @@
           if (id && id !== "default") {
             document.documentElement.setAttribute("data-palette", id)
           }
+          // TUI-режим до первой отрисовки (зеркало config.tuiMode, см. theme.ts)
+          if (localStorage.getItem("ids-tui") === "1") {
+            document.documentElement.setAttribute("data-tui", "1")
+          }
         } catch (e) {
           /* localStorage недоступен — останется стандартная палитра */
         }

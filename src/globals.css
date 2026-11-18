@@ -692,6 +692,25 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   TUI-режим (data-tui на <html>): терминальная эстетика на всё приложение —
+   моноширинный шрифт, нулевые скругления, без теней/блюра, чуть плотнее.
+   Включается переключателем в настройках; зеркалируется в localStorage
+   (ids-tui) и применяется до первой отрисовки (index.html).
+   --------------------------------------------------------------------------- */
+html[data-tui] {
+  font-size: 14px;
+  font-family: var(--font-mono);
+}
+html[data-tui] * {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+html[data-tui] .cm-scroller {
+  font-family: var(--font-mono) !important;
+}
+
 /* Подсветка diff-блоков (```diff) в стиле VSCode/GitHub: зелёный — добавлено,
    красный — удалено, синий — заголовок hunk (@@). Переменные общие для Live
    (декорации CodeMirror) и «Просмотра» (react-markdown), зависят от темы. */
