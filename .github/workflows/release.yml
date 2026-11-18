@@ -50,24 +50,54 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
+          # Описание релиза — из файла release_notes/<тег>.md (напр. v0.3.2.md).
+          # Нет файла → автогенерированный текст + warning.
+          NOTES_FILE="release_notes/${TAG}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "Release notes: $NOTES_FILE"
+          else
+            echo "::warning::${NOTES_FILE} не найден — описание релиза автогенерированное."
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG уже существует — tauri-action только загрузит артефакты."
+            # Перезапуск/перетяжка тега: обновим описание из файла, если он есть.
+            if [ -f "$NOTES_FILE" ]; then
+              gh release edit "$TAG" --title "IDS $TAG" --notes-file "$NOTES_FILE" \
+                && echo "Описание релиза обновлено из ${NOTES_FILE}."
+            fi
             exit 0
           fi
-          if gh release create "$TAG" --title "IDS $TAG" --draft --notes "Tauri desktop build $TAG (auto-generated)" 2>&1; then
-            echo "Создан draft-release $TAG."
-          else
-            # Race: другой matrix-джоб мог создать релиз между view и create.
-            if gh release view "$TAG" >/dev/null 2>&1; then
-              echo "Release $TAG создан другим matrix-джобом (race) — загрузим в него."
-              exit 0
+          if [ -f "$NOTES_FILE" ]; then
+            if gh release create "$TAG" --title "IDS $TAG" --draft --notes-file "$NOTES_FILE" 2>&1; then
+              echo "Создан draft-release $TAG (описание из ${NOTES_FILE})."
+            else
+              # Race: другой matrix-джоб мог создать релиз между view и create.
+              if gh release view "$TAG" >/dev/null 2>&1; then
+                echo "Release $TAG создан другим matrix-джобом (race) — загрузим в него."
+                exit 0
+              fi
+              echo "::error::Не удалось создать release. Проверьте:"
+              echo "::error::  repo Settings → Actions → General → Workflow permissions = 'Read and write permissions'"
+              echo "::error::  (по умолчанию для новых репо — read-only, даже с permissions: contents: write в workflow)"
+              echo "::error::  Альтернатива: создать PAT с scope 'repo', добавить как secret RELEASE_TOKEN,"
+              echo "::error::  и заменить GITHUB_TOKEN на RELEASE_TOKEN в env шага tauri-action."
+              exit 1
             fi
-            echo "::error::Не удалось создать release. Проверьте:"
-            echo "::error::  repo Settings → Actions → General → Workflow permissions = 'Read and write permissions'"
-            echo "::error::  (по умолчанию для новых репо — read-only, даже с permissions: contents: write в workflow)"
-            echo "::error::  Альтернатива: создать PAT с scope 'repo', добавить как secret RELEASE_TOKEN,"
-            echo "::error::  и заменить GITHUB_TOKEN на RELEASE_TOKEN в env шага tauri-action."
-            exit 1
+          else
+            if gh release create "$TAG" --title "IDS $TAG" --draft --notes "Tauri desktop build $TAG (auto-generated)" 2>&1; then
+              echo "Создан draft-release $TAG."
+            else
+              if gh release view "$TAG" >/dev/null 2>&1; then
+                echo "Release $TAG создан другим matrix-джобом (race) — загрузим в него."
+                exit 0
+              fi
+              echo "::error::Не удалось создать release. Проверьте:"
+              echo "::error::  repo Settings → Actions → General → Workflow permissions = 'Read and write permissions'"
+              echo "::error::  (по умолчанию для новых репо — read-only, даже с permissions: contents: write в workflow)"
+              echo "::error::  Альтернатива: создать PAT с scope 'repo', добавить как secret RELEASE_TOKEN,"
+              echo "::error::  и заменить GITHUB_TOKEN на RELEASE_TOKEN в env шага tauri-action."
+              exit 1
+            fi
           fi
 
       - uses: oven-sh/setup-bun@v2
