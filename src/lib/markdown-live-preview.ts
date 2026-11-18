@@ -13,6 +13,7 @@
  * для корректной видимости ` ``` ` у границ вьюпорта.
  */
 import type { EditorState, Extension } from '@codemirror/state'
+import { StateField } from '@codemirror/state'
 import {
   Decoration,
   EditorView,
@@ -492,24 +493,21 @@ export function buildLiveDecorations(
       }
 
       // --- GFM-таблица ---
+      // ВАЖНО: сам блок-виджет таблицы выдаётся StateField'ом (buildTableDecorations,
+      // прямое значение фасета EditorView.decorations). Через декорации ViewPlugin
+      // block-декорации запрещены CodeMirror — RangeError
+      // "Block decorations may not be specified via plugins".
+      // Здесь только помечаем строки таблицы занятыми, чтобы инлайн-скан
+      // не пытался раскрасить их как список/курсив.
       if (n >= tableUntil) {
         const table = parseTable(doc, n)
         if (table) {
-          const from = base
-          const to = doc.line(table.endLine).to
           tableUntil = table.endLine + 1
-          if (!touched(from, to)) {
-            push(
-              from,
-              to,
-              Decoration.replace({
-                widget: new TableWidget(table.data),
-                block: true,
-              }),
-            )
-            continue
-          }
+          continue
         }
+      } else {
+        // строка внутри уже распознанной таблицы — инлайн-декорации не нужны
+        continue
       }
     }
 
@@ -743,13 +741,59 @@ function imageClick(
 }
 
 /**
+ * Блок-декорации таблиц: выдаются через StateField (прямое значение фасета
+ * EditorView.decorations) — CodeMirror запрещает block-декорации через
+ * декорации ViewPlugin. Курсор/выделение внутри таблицы → исходник.
+ */
+export function buildTableDecorations(state: EditorState): DecorationSet {
+  const doc = state.doc
+  const items: DecorationItem[] = []
+  const ranges = state.selection.ranges
+  const touched = (from: number, to: number) =>
+    ranges.some((r) => r.from <= to && r.to >= from)
+  let fence: FenceState | null = null
+  for (let n = 1; n <= doc.lines; n++) {
+    const line = doc.line(n)
+    fence = updateFence(line.text, fence)
+    if (fence !== null) continue
+    const table = parseTable(doc, n)
+    if (!table) continue
+    const from = line.from
+    const to = doc.line(table.endLine).to
+    if (!touched(from, to)) {
+      items.push({
+        from,
+        to,
+        deco: Decoration.replace({
+          widget: new TableWidget(table.data),
+          block: true,
+        }),
+      })
+    }
+    n = table.endLine
+  }
+  const rangesOut: Range<Decoration>[] = items.map(({ from, to, deco }) =>
+    deco.range(from, to),
+  )
+  return Decoration.set(rangesOut, true)
+}
+
+/**
  * Плагин live-preview. `resolveImageSrc` вызывается при каждой перерисовке,
  * поэтому вложения можно подгружать асинхронно после открытия документа.
  * Инлайн-декорации считаются только для видимой области — скролл
- * триггерит viewportChanged и пересчёт.
+ * триггерит viewportChanged и пересчёт. Блок-декорации таблиц живут
+ * в отдельном StateField (требование CodeMirror).
  */
 export function livePreview(handlers: LivePreviewHandlers): Extension {
+  const tables = StateField.define<DecorationSet>({
+    create: (state) => buildTableDecorations(state),
+    update: (value, tr) =>
+      tr.docChanged || tr.selection ? buildTableDecorations(tr.state) : value,
+    provide: (f) => EditorView.decorations.from(f),
+  })
   return [
+    tables,
     ViewPlugin.fromClass(
       class {
         decorations: DecorationSet
