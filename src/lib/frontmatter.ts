@@ -106,6 +106,9 @@ export function serializeFrontmatter(fm: Frontmatter): string {
   lines.push(`related: ${flowArray(fm.related)}`)
   lines.push(COMMENT.author)
   lines.push(`author: ${scalar(fm.author)}`)
+  // Скрытое служебное поле — дата сохранения. Без него строка не пишется
+  // (эталонный шаблон не меняется).
+  if (fm.saved_at) lines.push(`saved_at: ${scalar(fm.saved_at)}`)
   return lines.join("\n")
 }
 

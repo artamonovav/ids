@@ -392,8 +392,8 @@ export function SettingsView() {
           />
         </Section>
 
-        {/* Режим */}
-        <Section title="Режим работы" desc="Автономный режим откладывает отправку.">
+        {/* Режим работы: автономный режим + вид (TUI, таблица, масштаб) */}
+        <Section title="Режим работы" desc="Автономный режим и оформление приложения.">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Автономный режим</p>
@@ -401,10 +401,7 @@ export function SettingsView() {
             </div>
             <Switch checked={settings.offline} onCheckedChange={(v) => setOffline(v)} />
           </div>
-        </Section>
-
-        {/* Вид */}
-        <Section title="Вид" desc="Оформление рабочей области и редактора.">
+          <Separator />
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">TUI-режим</p>

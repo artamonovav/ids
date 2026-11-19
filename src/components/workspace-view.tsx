@@ -45,6 +45,16 @@ const TYPE_BADGE: Record<string, "destructive" | "secondary" | "outline"> = {
 
 type Mode = "recent" | "drafts" | "all"
 
+/** Колонки таблицы, доступные для сортировки. */
+type SortKey =
+  | "number"
+  | "type"
+  | "environment"
+  | "product"
+  | "symptom"
+  | "author"
+  | "updatedAt"
+
 interface DeleteTarget {
   description: string
   run: () => void
@@ -112,7 +122,12 @@ export function WorkspaceView() {
   const [q, setQ] = React.useState("")
   const [type, setType] = React.useState<"all" | Type>("all")
   const [mode, setMode] = React.useState<Mode>("recent")
-  const [limit, setLimit] = React.useState(PAGE)
+  // Пагинация «Все»: перелистывание страниц вместо «показать ещё».
+  const [page, setPage] = React.useState(1)
+  // Сортировка таблицы по колонкам. По умолчанию — номер по убыванию
+  // (от больших SPAS к меньшим).
+  const [sortKey, setSortKey] = React.useState<SortKey>("number")
+  const [sortDir, setSortDir] = React.useState<1 | -1>(-1)
 
   const folders = React.useMemo(() => selectFolders(files), [files])
   const tempDrafts = React.useMemo(
@@ -152,6 +167,66 @@ export function WorkspaceView() {
     [baseFolders, term, type]
   )
 
+  // Сортировка таблицы по выбранной колонке (применяется к отфильтрованным).
+  const sortedFolders = React.useMemo(() => {
+    const arr = [...filteredFolders]
+    const num = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0
+    arr.sort((a, b) => {
+      let r = 0
+      switch (sortKey) {
+        case "number":
+          r = num(a.number) - num(b.number)
+          break
+        case "updatedAt":
+          r = a.updatedAt - b.updatedAt
+          break
+        case "product":
+          r = a.main.frontmatter.product
+            .join(", ")
+            .localeCompare(b.main.frontmatter.product.join(", "), "ru")
+          break
+        case "type":
+          r = (a.main.frontmatter.type || "").localeCompare(
+            b.main.frontmatter.type || "",
+            "ru"
+          )
+          break
+        case "environment":
+          r = (a.main.frontmatter.environment || "").localeCompare(
+            b.main.frontmatter.environment || "",
+            "ru"
+          )
+          break
+        case "symptom":
+          r = (a.main.frontmatter.symptom || "").localeCompare(
+            b.main.frontmatter.symptom || "",
+            "ru"
+          )
+          break
+        case "author":
+          r = (a.main.frontmatter.author || "").localeCompare(
+            b.main.frontmatter.author || "",
+            "ru"
+          )
+          break
+      }
+      return r * sortDir
+    })
+    return arr
+  }, [filteredFolders, sortKey, sortDir])
+
+  /** Клик по заголовку: та же колонка — сменить направление; новая —
+   *  естественное направление (строки — А→Я, номер/дата — по убыванию). */
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 1 ? -1 : 1))
+    } else {
+      setSortKey(key)
+      setSortDir(key === "number" || key === "updatedAt" ? -1 : 1)
+    }
+    setPage(1)
+  }
+
   const filteredTemps = React.useMemo(
     () =>
       tempDrafts.filter(
@@ -164,13 +239,17 @@ export function WorkspaceView() {
   )
 
   React.useEffect(() => {
-    setLimit(PAGE)
+    setPage(1)
   }, [mode, q, type])
 
   const showTemps = mode === "drafts"
-  const visibleFolders = mode === "recent"
-    ? filteredFolders.slice(0, recentLimit)
-    : filteredFolders.slice(0, limit)
+  // «Последние» — recentLimit свежих; «Все» — перелистывающая пагинация.
+  const pages = Math.max(1, Math.ceil(sortedFolders.length / PAGE))
+  const safePage = Math.min(page, pages)
+  const visibleFolders =
+    mode === "recent"
+      ? filteredFolders.slice(0, recentLimit)
+      : sortedFolders.slice((safePage - 1) * PAGE, safePage * PAGE)
   const hasAny =
     visibleFolders.length > 0 || (showTemps && filteredTemps.length > 0)
 
@@ -362,13 +441,28 @@ export function WorkspaceView() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2 font-medium">Номер</th>
-                    <th className="px-2 py-2 font-medium">Тип</th>
-                    <th className="px-2 py-2 font-medium">Окр.</th>
-                    <th className="px-2 py-2 font-medium">Продукты</th>
-                    <th className="px-2 py-2 font-medium">Симптом</th>
-                    <th className="hidden px-2 py-2 font-medium lg:table-cell">Автор</th>
-                    <th className="px-2 py-2 text-right font-medium">Обновлено</th>
+                    {(
+                      [
+                        ["number", "Номер", "px-3 py-2"],
+                        ["type", "Тип", "px-2 py-2"],
+                        ["environment", "Окр.", "px-2 py-2"],
+                        ["product", "Продукты", "px-2 py-2"],
+                        ["symptom", "Симптом", "px-2 py-2"],
+                        ["author", "Автор", "hidden px-2 py-2 lg:table-cell"],
+                        ["updatedAt", "Обновлено", "px-2 py-2 text-right"],
+                      ] as const
+                    ).map(([key, label, cls]) => (
+                      <th
+                        key={key}
+                        scope="col"
+                        className={`cursor-pointer select-none whitespace-nowrap font-medium hover:text-foreground ${cls}`}
+                        onClick={() => toggleSort(key)}
+                        title="Сортировать"
+                      >
+                        {label}
+                        {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -488,14 +582,27 @@ export function WorkspaceView() {
             </div>
           ))}
 
-          {mode === "all" && filteredFolders.length > limit && (
-            <div className="flex flex-col items-center gap-1 py-2 text-center">
-              <Button variant="outline" size="sm" onClick={() => setLimit((l) => l + PAGE)}>
-                Показать ещё (ещё {filteredFolders.length - limit})
+          {mode === "all" && (
+            <div className="flex items-center justify-center gap-3 py-1">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage <= 1}
+                onClick={() => setPage(safePage - 1)}
+              >
+                ‹ Назад
               </Button>
-              <p className="text-[11px] text-muted-foreground">
-                Показано {visibleFolders.length} из {filteredFolders.length}
-              </p>
+              <span className="text-xs text-muted-foreground">
+                Стр. {safePage} из {pages} ({sortedFolders.length})
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage >= pages}
+                onClick={() => setPage(safePage + 1)}
+              >
+                Вперёд ›
+              </Button>
             </div>
           )}
           {mode === "recent" && filteredFolders.length > recentLimit && (

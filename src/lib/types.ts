@@ -32,6 +32,10 @@ export interface Frontmatter {
   resolution: string // допускается многострочность
   related: string[] // YAML-массив номеров задач
   author: string // "ФИО <email>"
+  /** Дата сохранения в базу знаний (ISO). Скрытое поле: не показывается в
+   *  форме, заполняется при сохранении; в UI «обновлено» берётся из него,
+   *  при отсутствии — по текущей логике (mtime файла). */
+  saved_at?: string
 }
 
 export interface Attachment {

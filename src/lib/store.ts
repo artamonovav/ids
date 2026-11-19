@@ -93,6 +93,10 @@ function parseFileEntries(entries: FileEntry[]): Localization[] {
     const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(content)
     const frontmatter = m ? parseFrontmatter(m[1]) : { ...EMPTY_FRONTMATTER }
     const body = m ? m[2].replace(/^\n+/, "") : content
+    // «Обновлено»: из скрытого поля saved_at (дата сохранения), при
+    // отсутствии — по текущей логике (mtime файла).
+    const savedAtMs = Date.parse(frontmatter.saved_at ?? "")
+    const updatedAt = Number.isFinite(savedAtMs) ? savedAtMs : e.modified
     result.push({
       id: e.path,
       number,
@@ -101,7 +105,7 @@ function parseFileEntries(entries: FileEntry[]): Localization[] {
       body,
       attachments: [],
       createdAt: e.modified,
-      updatedAt: e.modified,
+      updatedAt,
       dirty: false,
       synced: true,
     })
@@ -501,13 +505,21 @@ export const useStore = create<State>()((set, get) => ({
     const before = get().files.find((f) => f.id === file.id)
     // В базу знаний (не .tmp) — есть что синхронизировать; черновик — нет.
     const touchesKb = !!file.number && !file.fileName.startsWith(".tmp/")
+    // Скрытое поле saved_at — дата сохранения в базу знаний.
+    const saved: Localization = touchesKb
+      ? {
+          ...file,
+          frontmatter: { ...file.frontmatter, saved_at: new Date().toISOString() },
+          updatedAt: Date.now(),
+        }
+      : file
     set((s) => ({
-      files: s.files.some((f) => f.id === file.id)
-        ? s.files.map((f) => (f.id === file.id ? file : f))
-        : [...s.files, file],
+      files: s.files.some((f) => f.id === saved.id)
+        ? s.files.map((f) => (f.id === saved.id ? saved : f))
+        : [...s.files, saved],
       syncStatus: touchesKb ? "yellow" : s.syncStatus,
     }))
-    await writeLoc(base, file)
+    await writeLoc(base, saved)
     // Промоушен .tmp → KB: удалить старый .tmp-черновик + его вложения.
     // writeLoc уже записал KB-файл + вложения в <number>/attachments/.
     // Старый .tmp/<draft>.md и .tmp/attachments/<name> — orphaned, удаляем.
