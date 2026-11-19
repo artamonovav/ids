@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -148,6 +155,8 @@ export function SettingsView() {
   const update = useStore((s) => s.update)
   const checkUpdate = useStore((s) => s.checkUpdate)
   const setTuiMode = useStore((s) => s.setTuiMode)
+  const setTableView = useStore((s) => s.setTableView)
+  const setFontScale = useStore((s) => s.setFontScale)
   const { toast } = useToast()
   const source = useProjectSource(base)
   const [branch, setBranch] = React.useState("")
@@ -392,20 +401,52 @@ export function SettingsView() {
             </div>
             <Switch checked={settings.offline} onCheckedChange={(v) => setOffline(v)} />
           </div>
-          <Separator />
+        </Section>
+
+        {/* Вид */}
+        <Section title="Вид" desc="Оформление рабочей области и редактора.">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">TUI-режим</p>
               <p className="text-[11px] text-muted-foreground">
                 Терминальный вид всего приложения: моноширинный шрифт, без
-                скруглений. Рабочая область — клавиатурный список
-                (j/k · Enter · n · s · / · d — удаление черновика).
+                скруглений, резиновая ширина. Рабочая область — клавиатурный
+                список (j/k · Enter · n · s · d · v · /).
               </p>
             </div>
-            <Switch
-              checked={config.tuiMode}
-              onCheckedChange={(v) => setTuiMode(v)}
-            />
+            <Switch checked={config.tuiMode} onCheckedChange={(v) => setTuiMode(v)} />
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Табличный список</p>
+              <p className="text-[11px] text-muted-foreground">
+                В графическом режиме: плотная таблица вместо карточек
+                (номер, тип, окружение, продукты, симптом, автор, обновлено).
+              </p>
+            </div>
+            <Switch checked={config.tableView} onCheckedChange={(v) => setTableView(v)} />
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Размер текста</p>
+              <p className="text-[11px] text-muted-foreground">Масштаб всего интерфейса.</p>
+            </div>
+            <Select
+              value={String(config.fontScale)}
+              onValueChange={(v) => setFontScale(parseInt(v, 10))}
+            >
+              <SelectTrigger className="h-8 w-40 text-sm">
+                <SelectValue placeholder="Обычный" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="85">Мелкий (85%)</SelectItem>
+                <SelectItem value="100">Обычный (100%)</SelectItem>
+                <SelectItem value="115">Крупный (115%)</SelectItem>
+                <SelectItem value="130">Очень крупный (130%)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </Section>
 

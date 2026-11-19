@@ -30,6 +30,7 @@ pub fn run() {
             commands::read_legacy_folder,
             commands::is_git_repo,
             commands::git_pull_only,
+            commands::git_sync_state,
             commands::init_project,
             commands::read_localizations,
             commands::read_repo_files,

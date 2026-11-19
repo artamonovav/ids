@@ -105,6 +105,7 @@ export function WorkspaceView() {
   const removeFolderDrafts = useStore((s) => s.removeFolderDrafts)
   const removeFile = useStore((s) => s.removeFile)
   const recentLimit = useStore((s) => s.config.recentLimit)
+  const tableView = useStore((s) => s.config.tableView)
   const { toast } = useToast()
 
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null)
@@ -356,7 +357,62 @@ export function WorkspaceView() {
             </div>
           )}
 
-          {visibleFolders.length > 0 && (
+          {visibleFolders.length > 0 && (tableView ? (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
+                    <th className="px-3 py-2 font-medium">Номер</th>
+                    <th className="px-2 py-2 font-medium">Тип</th>
+                    <th className="px-2 py-2 font-medium">Окр.</th>
+                    <th className="px-2 py-2 font-medium">Продукты</th>
+                    <th className="px-2 py-2 font-medium">Симптом</th>
+                    <th className="hidden px-2 py-2 font-medium lg:table-cell">Автор</th>
+                    <th className="px-2 py-2 text-right font-medium">Обновлено</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleFolders.map((f) => {
+                    const fm = f.main.frontmatter
+                    const dirty = f.files.some((x) => x.dirty)
+                    return (
+                      <tr
+                        key={f.number}
+                        className="cursor-pointer border-b transition-colors last:border-0 hover:bg-accent/50"
+                        onClick={() => openFolder(f.number)}
+                        title={`Открыть ${f.number}`}
+                      >
+                        <td className="whitespace-nowrap px-3 py-1.5 font-mono font-semibold">
+                          {f.number}
+                          {dirty && (
+                            <span
+                              className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
+                              title="Несинхронизировано"
+                            />
+                          )}
+                          {f.files.length > 1 && (
+                            <span className="ml-1 text-[11px] text-muted-foreground">+{f.files.length - 1}</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5">{fm.type}</td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-muted-foreground">{fm.environment}</td>
+                        <td className="max-w-40 truncate px-2 py-1.5 font-mono text-xs text-muted-foreground" title={fm.product.join(", ")}>
+                          {fm.product.join(", ")}
+                        </td>
+                        <td className="max-w-md truncate px-2 py-1.5">{fm.symptom || "— без описания симптома —"}</td>
+                        <td className="hidden max-w-44 truncate px-2 py-1.5 text-xs text-muted-foreground lg:table-cell">
+                          {fm.author || "— без автора —"}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground">
+                          {fmtDate(f.updatedAt)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
             <div className="grid gap-2">
               {visibleFolders.map((f) => {
                 const fm = f.main.frontmatter
@@ -430,7 +486,7 @@ export function WorkspaceView() {
                 )
               })}
             </div>
-          )}
+          ))}
 
           {mode === "all" && filteredFolders.length > limit && (
             <div className="flex flex-col items-center gap-1 py-2 text-center">

@@ -21,7 +21,7 @@ import {
 } from "./repo"
 import { EMPTY_FRONTMATTER, TEMPLATE_BODY } from "./template"
 import { fetchLatestRelease, type UpdateInfo } from "./update"
-import { applyTuiMode } from "./theme"
+import { applyTuiMode, applyFontScale } from "./theme"
 
 // UUID polyfill — crypto.randomUUID() может отсутствовать в старом WebKitGTK (Ubuntu 22.04)
 function uuid(): string {
@@ -67,6 +67,9 @@ async function loadAttachmentsFor(number: string, fileId: string) {
 function logWork(message: string) {
   void invoke("log_event", { kind: "app", message }).catch(() => {})
 }
+
+/** Загрузка вложений для предпросмотра (шторка в списках) — публичный алиас. */
+export const loadAttachments = loadAttachmentsFor
 
 function parseFileEntries(entries: FileEntry[]): Localization[] {
   const result: Localization[] = []
@@ -212,6 +215,11 @@ async function loadProject(folder: string): Promise<void> {
   })
   logWork(`открыт проект ${folder}`)
   applyTuiMode(config.tuiMode)
+  applyFontScale(config.fontScale, config.tuiMode)
+
+  // Статус синхронизации — по реальному git (могли остаться незакоммиченные
+  // с прошлого раза / неотправленные коммиты).
+  void useStore.getState().refreshSyncState()
 
   // Фоновый pull: рабочая область уже открыта, сеть не задерживает старт.
   // После pull перечитываем диск — пришли ли изменения от других (multi-user).
@@ -234,6 +242,7 @@ async function loadProject(folder: string): Promise<void> {
         }
       })
       logWork("фоновый pull завершён, файлы перечитаны")
+      void useStore.getState().refreshSyncState()
     } catch (e) {
       logWork(`фоновый pull: ошибка: ${String(e)}`)
     }
@@ -281,6 +290,12 @@ interface State {
   dismissGitIdentity: () => void
   /** TUI-режим: терминальная эстетика на всё приложение (config.yaml). */
   setTuiMode: (on: boolean) => Promise<void>
+  /** Табличное отображение списка (графический режим). */
+  setTableView: (on: boolean) => Promise<void>
+  /** Масштаб текста, проценты (применяется сразу). */
+  setFontScale: (pct: number) => Promise<void>
+  /** Пересчитать статус синхронизации по реальному состоянию git. */
+  refreshSyncState: () => Promise<void>
   setView: (v: View) => void
   openFolder: (number: string) => void
   openFile: (fileId: string) => void
@@ -387,7 +402,38 @@ export const useStore = create<State>()((set, get) => ({
     const { config } = get()
     await get().writeConfig({ ...config, tuiMode: on })
     applyTuiMode(on)
+    // размер корневого шрифта зависит от режима (TUI плотнее)
+    applyFontScale(config.fontScale, on)
     logWork(`TUI-режим ${on ? "включён" : "выключен"}`)
+  },
+
+  setTableView: async (on) => {
+    const { config } = get()
+    await get().writeConfig({ ...config, tableView: on })
+    logWork(`табличный список ${on ? "включён" : "выключен"}`)
+  },
+
+  setFontScale: async (pct) => {
+    const { config } = get()
+    await get().writeConfig({ ...config, fontScale: pct })
+    applyFontScale(pct, config.tuiMode)
+    logWork(`масштаб текста ${pct}%`)
+  },
+
+  /** Статус по реальному git (uncommitted без .tmp + unpushed), а не по
+   *  флажку dirty. Красный/оффлайн не перетираем. */
+  refreshSyncState: async () => {
+    const { base, settings } = get()
+    if (!base || settings.offline) return
+    try {
+      const st = await invoke<{ uncommitted: number; unpushed: number }>(
+        "git_sync_state",
+        { folder: base },
+      )
+      if (get().syncStatus === "red") return
+      const needs = st.uncommitted > 0 || st.unpushed > 0
+      set({ syncStatus: needs ? "yellow" : "green" })
+    } catch { /* git недоступен — статус не трогаем */ }
   },
 
   checkUpdate: async (silent = true) => {
@@ -443,7 +489,7 @@ export const useStore = create<State>()((set, get) => ({
       files: [...s.files, file],
       view: "editor",
       editing: { number: "", fileId: id, mode: "edit" },
-      syncStatus: "yellow",
+      // .tmp-черновик не синхронизируется — статус не трогаем
     }))
     await writeLoc(base, file)
     logWork(`создан черновик ${fileName}`)
@@ -453,11 +499,13 @@ export const useStore = create<State>()((set, get) => ({
   upsertFile: async (file) => {
     const { base } = get()
     const before = get().files.find((f) => f.id === file.id)
+    // В базу знаний (не .tmp) — есть что синхронизировать; черновик — нет.
+    const touchesKb = !!file.number && !file.fileName.startsWith(".tmp/")
     set((s) => ({
       files: s.files.some((f) => f.id === file.id)
         ? s.files.map((f) => (f.id === file.id ? file : f))
         : [...s.files, file],
-      syncStatus: "yellow",
+      syncStatus: touchesKb ? "yellow" : s.syncStatus,
     }))
     await writeLoc(base, file)
     // Промоушен .tmp → KB: удалить старый .tmp-черновик + его вложения.
@@ -481,10 +529,12 @@ export const useStore = create<State>()((set, get) => ({
       files: s.files.map((f) =>
         f.id === id ? { ...f, ...patch, updatedAt: Date.now(), dirty: true } : f
       ),
-      syncStatus: "yellow",
     }))
     const f = get().files.find((x) => x.id === id)
     if (!f) return
+    // .tmp-автосохранение/переименование черновика — статус не трогаем
+    const touchesKb = !!f.number && !f.fileName.startsWith(".tmp/")
+    if (touchesKb) set({ syncStatus: "yellow" })
     const oldPath = before ? pathFor(before) : ""
     const newPath = pathFor(f)
     if (oldPath && newPath && oldPath !== newPath) {
@@ -503,9 +553,9 @@ export const useStore = create<State>()((set, get) => ({
       const path = pathFor(f)
       if (path) { try { await invoke("delete_file", { base, path }) } catch {} }
     }
-    set((s) => ({
-      files: s.files.filter((x) => x.id !== id), syncStatus: "yellow"
-    }))
+    // Удалённая KB-запись — есть что синхронизировать; .tmp-черновик — нет.
+    if (f?.number) set({ syncStatus: "yellow" })
+    set((s) => ({ files: s.files.filter((x) => x.id !== id) }))
     if (f) logWork(`удалён черновик ${f.number || ""}${f.number ? "/" : ""}${f.fileName}`)
   },
 
@@ -618,6 +668,7 @@ export const useStore = create<State>()((set, get) => ({
         lastCommitMessage: commitMessage,
       }))
       logWork(`синхронизация выполнена (${commitMessage})`)
+      void get().refreshSyncState()
     } catch (e) {
       set({ syncing: false, syncStatus: "red", syncError: String(e) })
       logWork(`ошибка синхронизации: ${String(e)}`)

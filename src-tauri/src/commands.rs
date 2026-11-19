@@ -161,6 +161,48 @@ pub async fn git_pull_only(folder: String) -> Result<(), String> {
     blocking(move || run_git_ok(&["-C", &folder, "pull", "--ff-only"])).await
 }
 
+#[derive(Serialize)]
+pub struct SyncState {
+    /// Файлы с незакоммиченными изменениями (включая staged и untracked),
+    /// кроме .tmp/ — черновики никогда не синхронизируются.
+    pub uncommitted: usize,
+    /// Коммитов локально, которых нет в upstream.
+    pub unpushed: usize,
+}
+
+/// Реальное состояние синхронизации из git (не из флажка dirty):
+/// `git status --porcelain` (без .tmp) + `rev-list --count @{upstream}..HEAD`.
+/// Нет upstream — unpushed = 0; папка не репозиторий — оба нуля.
+#[tauri::command]
+pub async fn git_sync_state(folder: String) -> Result<SyncState, String> {
+    blocking(move || {
+        if !Path::new(&folder).join(".git").exists() {
+            return Ok(SyncState { uncommitted: 0, unpushed: 0 });
+        }
+        let mut uncommitted = 0usize;
+        let out = run_git(&[
+            "-C", &folder, "status", "--porcelain", "--", ".", ":(exclude).tmp",
+        ])?;
+        if out.status.success() {
+            uncommitted = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .count();
+        }
+        let mut unpushed = 0usize;
+        if let Ok(up) = run_git(&["-C", &folder, "rev-list", "--count", "@{upstream}..HEAD"]) {
+            if up.status.success() {
+                unpushed = String::from_utf8_lossy(&up.stdout)
+                    .trim()
+                    .parse::<usize>()
+                    .unwrap_or(0);
+            }
+        }
+        Ok(SyncState { uncommitted, unpushed })
+    })
+    .await
+}
+
 /// Первый запуск / смена папки:
 ///  - если git-репо → git pull (host git);
 ///  - создать служебные папки (.dictionary, _template, .tmp) + .gitignore + дефолтные справочники.

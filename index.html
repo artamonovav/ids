@@ -13,10 +13,15 @@
           if (id && id !== "default") {
             document.documentElement.setAttribute("data-palette", id)
           }
-          // TUI-режим до первой отрисовки (зеркало config.tuiMode, см. theme.ts)
-          if (localStorage.getItem("ids-tui") === "1") {
+          // TUI-режим и масштаб текста до первой отрисовки
+          // (зеркала config.tuiMode/config.fontScale, см. theme.ts)
+          var tui = localStorage.getItem("ids-tui") === "1"
+          if (tui) {
             document.documentElement.setAttribute("data-tui", "1")
           }
+          var fs = parseInt(localStorage.getItem("ids-fontscale"), 10) || 100
+          document.documentElement.style.fontSize =
+            Math.round((tui ? 14 : 16) * fs / 100) + "px"
         } catch (e) {
           /* localStorage недоступен — останется стандартная палитра */
         }

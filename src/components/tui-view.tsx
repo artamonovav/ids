@@ -1,11 +1,19 @@
 // TUI-подобный раздел: вид рабочей области в стиле opencode/btop —
 // моноширинный шрифт, панели с бордерами, ASCII-индикаторы, клавиатурная
-// навигация (j/k/g/G/Enter/n/s//q). Не терминал: тот же store и действия,
-// что у обычных вью. Мышь тоже работает (клик — выбор, двойной — открыть).
+// навигация (j/k/g/G/Enter/n/s/d//q). Не терминал: тот же store и действия,
+// что у обычных вью. Включается опцией «TUI-режим» в настройках.
+//
+// Мышь: клик — выбор, повторный клик по выбранной строке или двойной —
+// открыть. Tab обходит элементы управления (вкладки, фильтр, строки списка).
+// Шторка предпросмотра справа рендерит Markdown активной записи
+// (кнопка или клавиша v), следует за выбором.
 
 import * as React from "react"
-import { useStore, selectFolders } from "@/lib/store"
+import { useStore, selectFolders, loadAttachments } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
+import { MarkdownView } from "@/components/markdown-preview"
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels"
+import { Eye, EyeOff } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,6 +105,7 @@ export function TuiView() {
   const [q, setQ] = React.useState("")
   const [searchMode, setSearchMode] = React.useState(false)
   const [sel, setSel] = React.useState(0)
+  const [previewOpen, setPreviewOpen] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; name: string } | null>(null)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
@@ -114,68 +123,76 @@ export function TuiView() {
   )
 
   const term = q.trim().toLowerCase()
-  const items: { id: string; open: () => void; render: () => React.ReactNode }[] =
-    React.useMemo(() => {
-      if (tab === "kb") {
-        return folders
-          .filter((f) => !term || rowText(f.main).includes(term))
-          .map((f) => {
-            const fm = f.main.frontmatter
-            const dirty = f.files.some((x) => x.dirty)
-            return {
-              id: f.number,
-              open: () => openFolder(f.number),
-              render: () => (
-                <>
-                  <span className="w-32 shrink-0 font-semibold">{f.number}</span>
-                  <span className="w-28 shrink-0 truncate text-muted-foreground">
-                    {fm.type || "—"}
-                  </span>
-                  <span className="w-20 shrink-0 truncate text-muted-foreground">
-                    {fm.environment || "—"}
-                  </span>
-                  <span className="w-40 shrink-0 truncate" title={fm.product.join(", ")}>
-                    {fm.product.join(" ") || "—"}
-                  </span>
-                  <span className={`w-16 shrink-0 ${dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
-                    {dirty ? "● изм." : f.files.length > 1 ? `+${f.files.length - 1} ф.` : ""}
-                  </span>
-                  <span className="flex-1 truncate">{fm.symptom || "— без симптома —"}</span>
-                </>
-              ),
-            }
-          })
-      }
-      return drafts
-        .filter(
-          (f) =>
-            !term ||
-            rowText(f).includes(term) ||
-            f.fileName.toLowerCase().includes(term)
-        )
-        .map((f) => ({
-          id: f.id,
-          open: () => openFile(f.id),
-          render: () => (
-            <>
-              <span className="w-32 shrink-0 font-semibold">
-                {f.frontmatter.number || "без номера"}
-              </span>
-              <span className="w-28 shrink-0 text-muted-foreground">.tmp</span>
-              <span className="w-20 shrink-0 truncate text-muted-foreground">
-                {f.frontmatter.type || "—"}
-              </span>
-              <span className="w-40 shrink-0 truncate text-muted-foreground" title={f.fileName}>
-                {f.fileName}
-              </span>
-              <span className={`w-16 shrink-0 ${f.dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
-                {f.dirty ? "● изм." : ""}
-              </span>
-              <span className="flex-1 truncate">{f.frontmatter.symptom || "— без симптома —"}</span>
-            </>
-          ),
-        }))
-    }, [tab, folders, drafts, term, openFolder, openFile])
+  const items: {
+    id: string
+    open: () => void
+    file: Localization
+    render: () => React.ReactNode
+  }[] = React.useMemo(() => {
+    if (tab === "kb") {
+      return folders
+        .filter((f) => !term || rowText(f.main).includes(term))
+        .map((f) => {
+          const fm = f.main.frontmatter
+          const dirty = f.files.some((x) => x.dirty)
+          return {
+            id: f.number,
+            open: () => openFolder(f.number),
+            file: f.main,
+            render: () => (
+              <>
+                <span className="w-24 lg:w-32 shrink-0 truncate font-semibold" title={f.number}>
+                  {f.number}
+                </span>
+                <span className="w-16 sm:w-24 shrink-0 truncate text-muted-foreground" title={fm.type}>
+                  {fm.type || "—"}
+                </span>
+                <span className="w-12 md:w-20 shrink-0 truncate text-muted-foreground" title={fm.environment}>
+                  {fm.environment || "—"}
+                </span>
+                <span className="w-0 lg:w-40 lg:shrink-0 lg:truncate" title={fm.product.join(", ")}>
+                  {fm.product.join(" ") || "—"}
+                </span>
+                <span className={`w-14 shrink-0 ${dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+                  {dirty ? "● изм." : f.files.length > 1 ? `+${f.files.length - 1} ф.` : ""}
+                </span>
+                <span className="flex-1 min-w-0 truncate">{fm.symptom || "— без симптома —"}</span>
+              </>
+            ),
+          }
+        })
+    }
+    return drafts
+      .filter(
+        (f) =>
+          !term ||
+          rowText(f).includes(term) ||
+          f.fileName.toLowerCase().includes(term)
+      )
+      .map((f) => ({
+        id: f.id,
+        open: () => openFile(f.id),
+        file: f,
+        render: () => (
+          <>
+            <span className="w-24 lg:w-32 shrink-0 truncate font-semibold">
+              {f.frontmatter.number || "без номера"}
+            </span>
+            <span className="w-16 sm:w-24 shrink-0 text-muted-foreground">.tmp</span>
+            <span className="w-12 md:w-20 shrink-0 truncate text-muted-foreground">
+              {f.frontmatter.type || "—"}
+            </span>
+            <span className="w-0 lg:w-40 lg:shrink-0 lg:truncate text-muted-foreground" title={f.fileName}>
+              {f.fileName}
+            </span>
+            <span className={`w-14 shrink-0 ${f.dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+              {f.dirty ? "● изм." : ""}
+            </span>
+            <span className="flex-1 min-w-0 truncate">{f.frontmatter.symptom || "— без симптома —"}</span>
+          </>
+        ),
+      }))
+  }, [tab, folders, drafts, term, openFolder, openFile])
 
   // Фильтр/вкладка изменились → курсор в начало.
   React.useEffect(() => {
@@ -191,9 +208,22 @@ export function TuiView() {
   const totalKb = files.filter((f) => f.number).length
   const dirtyCount = files.filter((f) => f.dirty).length
   const products = useStore((s) => s.repoFiles[".dictionary/product.yaml"])
-  // считаем элементы YAML-списка: строки "  - значение"
   const productCount = (products?.match(/^\s+-/gm) || []).length
   const status = syncing ? { text: "СИНХРОНИЗАЦИЯ…", cls: "text-amber-600 dark:text-amber-400" } : STATUS_MAP[syncStatus]
+
+  // Активная запись для шторки предпросмотра.
+  const activeItem = items[sel] ?? null
+  const activeFile = activeItem ? activeItem.file : null
+
+  // Предпросмотр открыт → грузим вложения активной записи (картинки в теле).
+  React.useEffect(() => {
+    if (!previewOpen || !activeFile) return
+    void loadAttachments(activeFile.number, activeFile.id)
+  }, [previewOpen, activeFile?.id, activeFile?.number])
+
+  // Файл перезаписан на диске/в store — перечитываем актуальную версию.
+  const activeActual =
+    activeFile ? files.find((f) => f.id === activeFile.id) ?? activeFile : null
 
   async function handleSync() {
     await sync()
@@ -230,11 +260,13 @@ export function TuiView() {
     setSel((s) => Math.max(0, Math.min(s, items.length - 2)))
   }
 
-  // Клавиатура: j/k/g/G/Enter/n/s//q/Esc — как в opencode. Пока фокус в
-  // поиске — буквы идут в поле, работают только Esc/Enter.
+  // Клавиатура: j/k/g/G/Enter/n/s/d/v//q/Esc — как в opencode. Пока фокус в
+  // поиске — буквы идут в поле, работают только Esc/Enter. Tab — обычная
+  // навигация по элементам управления (не перехватываем).
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const inInput = e.target instanceof HTMLInputElement
+      const el = e.target as HTMLElement | null
+      const inInput = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
       if (inInput) return
       // Диалог удаления открыт — клавиши списка не работают, Esc закрывает диалог сам.
       if (deleteTarget) return
@@ -269,6 +301,9 @@ export function TuiView() {
         case "d":
           e.preventDefault()
           return askDelete()
+        case "v":
+          e.preventDefault()
+          return setPreviewOpen((p) => !p)
         case "/":
           e.preventDefault()
           setSearchMode(true)
@@ -292,6 +327,85 @@ export function TuiView() {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   })
+
+  const list = (
+    <div
+      ref={listRef}
+      className="h-full overflow-y-auto border border-border"
+      role="listbox"
+      aria-label="Список локализаций"
+    >
+      {items.length === 0 ? (
+        <p className="px-2 py-4 text-muted-foreground">
+          {term ? "Ничего не найдено. Esc — сбросить фильтр." : "Пусто. n — новый черновик."}
+        </p>
+      ) : (
+        items.map((item, i) => (
+          <div
+            key={item.id}
+            data-idx={i}
+            role="option"
+            aria-selected={i === sel}
+            tabIndex={0}
+            onClick={() => {
+              // Клик по выбранной строке открывает; первый клик — выбирает
+              // (обновляет предпросмотр).
+              if (i === sel) item.open()
+              else setSel(i)
+            }}
+            onDoubleClick={item.open}
+            onFocus={() => setSel(i)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                item.open()
+              }
+            }}
+            className={`flex cursor-pointer items-center gap-2 px-2 py-0.5 ${
+              i === sel
+                ? "bg-accent text-accent-foreground outline-none"
+                : "hover:bg-accent/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            }`}
+          >
+            {item.render()}
+          </div>
+        ))
+      )}
+    </div>
+  )
+
+  const preview = activeActual ? (
+    <div className="h-full overflow-y-auto border border-border p-3">
+      <div className="mb-2 border-b border-border pb-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold">{activeActual.number || "черновик"}</span>
+          {activeActual.frontmatter.type && (
+            <span className="text-muted-foreground">[{activeActual.frontmatter.type}]</span>
+          )}
+          {activeActual.frontmatter.environment && (
+            <span className="text-muted-foreground">[{activeActual.frontmatter.environment}]</span>
+          )}
+          {activeActual.dirty && (
+            <span className="text-amber-600 dark:text-amber-400">● не синхронизировано</span>
+          )}
+        </div>
+        <div className="text-[11px] text-muted-foreground">
+          {activeActual.frontmatter.author || "— без автора —"} · обновлено {fmtDate(activeActual.updatedAt)}
+        </div>
+        {activeActual.frontmatter.product.length > 0 && (
+          <div className="text-[11px]">продукты: {activeActual.frontmatter.product.join(", ")}</div>
+        )}
+      </div>
+      <MarkdownView
+        body={activeActual.body}
+        attachments={activeActual.attachments}
+      />
+    </div>
+  ) : (
+    <div className="flex h-full items-center justify-center border border-border p-4 text-muted-foreground">
+      Выберите запись в списке.
+    </div>
+  )
 
   return (
     <div className="flex h-[calc(100vh-10rem)] flex-col gap-1.5 font-mono text-[13px] leading-relaxed">
@@ -338,7 +452,7 @@ export function TuiView() {
         </div>
       </div>
 
-      {/* Вкладки + поиск */}
+      {/* Вкладки + поиск + предпросмотр */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <button
@@ -356,62 +470,59 @@ export function TuiView() {
             [ ЧЕРНОВИКИ {drafts.length} ]
           </button>
         </div>
-        {searchMode ? (
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">&gt;</span>
-            <input
-              ref={searchRef}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault()
-                  setSearchMode(false)
-                  setQ("")
-                } else if (e.key === "Enter") {
-                  e.preventDefault()
-                  openSelected()
-                }
-              }}
-              placeholder="фильтр… (Esc — выход)"
-              className="h-6 w-56 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-        ) : (
-          <span className="text-muted-foreground">
-            / — поиск
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {searchMode ? (
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">&gt;</span>
+              <input
+                ref={searchRef}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault()
+                    setSearchMode(false)
+                    setQ("")
+                  } else if (e.key === "Enter") {
+                    e.preventDefault()
+                    openSelected()
+                  }
+                }}
+                placeholder="фильтр… (Esc — выход)"
+                className="h-6 w-56 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+          ) : (
+            <span className="text-muted-foreground">/ — поиск</span>
+          )}
+          <button
+            type="button"
+            onClick={() => setPreviewOpen((p) => !p)}
+            className={`flex items-center gap-1 px-2 ${
+              previewOpen ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+            title={previewOpen ? "Скрыть предпросмотр (v)" : "Предпросмотр Markdown (v)"}
+          >
+            {previewOpen ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            предпросмотр
+          </button>
+        </div>
       </div>
 
-      {/* Список */}
-      <div
-        ref={listRef}
-        className="min-h-0 flex-1 overflow-y-auto border border-border"
-        role="listbox"
-        aria-label="Список локализаций"
-      >
-        {items.length === 0 ? (
-          <p className="px-2 py-4 text-muted-foreground">
-            {term ? "Ничего не найдено. Esc — сбросить фильтр." : "Пусто. n — новый черновик."}
-          </p>
+      {/* Список + шторка предпросмотра (1/3 ширины, перетаскивается) */}
+      <div className="min-h-0 flex-1">
+        {previewOpen ? (
+          <PanelGroup direction="horizontal" className="h-full">
+            <Panel defaultSize={67} minSize={25} className="min-w-0">
+              {list}
+            </Panel>
+            <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors rounded-none mx-0.5" />
+            <Panel defaultSize={33} minSize={15} className="min-w-0">
+              {preview}
+            </Panel>
+          </PanelGroup>
         ) : (
-          items.map((item, i) => (
-            <div
-              key={item.id}
-              data-idx={i}
-              role="option"
-              aria-selected={i === sel}
-              tabIndex={-1}
-              onClick={() => setSel(i)}
-              onDoubleClick={item.open}
-              className={`flex cursor-pointer items-center gap-2 px-2 py-0.5 ${
-                i === sel ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
-              }`}
-            >
-              {item.render()}
-            </div>
-          ))
+          list
         )}
       </div>
 
@@ -424,7 +535,9 @@ export function TuiView() {
           <span><b className="text-foreground">n</b> новый</span>
           <span><b className="text-foreground">s</b> синк</span>
           <span><b className="text-foreground">d</b> удалить (черновики)</span>
+          <span><b className="text-foreground">v</b> предпросмотр</span>
           <span><b className="text-foreground">/</b> поиск</span>
+          <span><b className="text-foreground">Tab</b> обход элементов</span>
           <span><b className="text-foreground">q</b> выход</span>
         </div>
         <span>обновлено {fmtDate(Date.now())}</span>

@@ -27,6 +27,26 @@ export const PALETTE_STORAGE_KEY = 'ids-palette'
  *  грузится асинхронно и для этого поздно). Значение — зеркало config.tuiMode. */
 export const TUI_STORAGE_KEY = 'ids-tui'
 
+/** Масштаб текста (проценты) — тоже зеркало config.fontScale для pre-paint. */
+export const FONT_SCALE_STORAGE_KEY = 'ids-fontscale'
+
+/** Базовый размер корневого шрифта: TUI плотнее (14px), обычный — 16px. */
+export function effectiveFontSize(scalePct: number, tuiMode: boolean): number {
+  const base = tuiMode ? 14 : 16
+  return Math.round((base * Math.max(50, Math.min(200, scalePct))) / 100)
+}
+
+/** Применить масштаб текста (размер корневого шрифта). */
+export function applyFontScale(scalePct: number, tuiMode: boolean): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.style.fontSize = `${effectiveFontSize(scalePct, tuiMode)}px`
+  try {
+    localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(scalePct))
+  } catch {
+    /* нет localStorage — масштаб живёт до перезапуска */
+  }
+}
+
 export function isPaletteId(id: string | null | undefined): boolean {
   return !!id && PALETTES.some((p) => p.id === id)
 }

@@ -39,6 +39,10 @@ export interface UserConfig {
   recentLimit: number
   /** TUI-режим: терминальная эстетика на всё приложение + клавиатурный список. */
   tuiMode: boolean
+  /** Табличное отображение списка в графическом режиме. */
+  tableView: boolean
+  /** Масштаб текста в процентах (100 = обычный). */
+  fontScale: number
 }
 
 export const DEFAULT_USER_CONFIG: UserConfig = {
@@ -46,6 +50,8 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   profile: { name: "", email: "" },
   recentLimit: 3,
   tuiMode: false,
+  tableView: false,
+  fontScale: 100,
 }
 
 function cfgQuote(s: string): string {
@@ -76,6 +82,8 @@ export function serializeConfig(c: UserConfig): string {
   if (c.profile.spaceCode) L.push(`  spaceCode: ${cfgVal(c.profile.spaceCode)}`)
   L.push(`recentLimit: ${c.recentLimit}`)
   if (c.tuiMode) L.push("tuiMode: true")
+  if (c.tableView) L.push("tableView: true")
+  if (c.fontScale !== 100) L.push(`fontScale: ${c.fontScale}`)
   return L.join("\n") + "\n"
 }
 
@@ -85,6 +93,8 @@ export function parseConfig(content: string | undefined): UserConfig {
     profile: { ...DEFAULT_USER_CONFIG.profile },
     recentLimit: DEFAULT_USER_CONFIG.recentLimit,
     tuiMode: DEFAULT_USER_CONFIG.tuiMode,
+    tableView: DEFAULT_USER_CONFIG.tableView,
+    fontScale: DEFAULT_USER_CONFIG.fontScale,
   }
   if (!content) return cfg
   for (const line of content.replace(/\r\n/g, "\n").split("\n")) {
@@ -99,6 +109,10 @@ export function parseConfig(content: string | undefined): UserConfig {
       cfg.recentLimit = parseInt(cfgUnquote(val), 10) || 3
     } else if (key === "tuiMode") {
       cfg.tuiMode = val.trim() === "true"
+    } else if (key === "tableView") {
+      cfg.tableView = val.trim() === "true"
+    } else if (key === "fontScale") {
+      cfg.fontScale = parseInt(cfgUnquote(val), 10) || 100
     } else {
       ;(cfg.profile as Record<string, string>)[key] = cfgUnquote(val)
     }
