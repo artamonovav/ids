@@ -13,7 +13,7 @@ import { useStore, selectFolders, loadAttachments } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 import { MarkdownView } from "@/components/markdown-preview"
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, X } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -332,6 +332,9 @@ export function TuiView() {
           if (searchMode) {
             setSearchMode(false)
             setQ("")
+          } else if (previewOpen) {
+            // Esc сначала закрывает шторку, повторный — выход из TUI.
+            setPreviewOpen(false)
           } else {
             setView("workspace")
           }
@@ -408,31 +411,43 @@ export function TuiView() {
   )
 
   const preview = activeActual ? (
-    <div className="h-full overflow-y-auto border border-border p-3">
-      <div className="mb-2 border-b border-border pb-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold">{activeActual.number || "черновик"}</span>
-          {activeActual.frontmatter.type && (
-            <span className="text-muted-foreground">[{activeActual.frontmatter.type}]</span>
-          )}
-          {activeActual.frontmatter.environment && (
-            <span className="text-muted-foreground">[{activeActual.frontmatter.environment}]</span>
-          )}
-          {activeActual.dirty && (
-            <span className="text-amber-600 dark:text-amber-400">● не синхронизировано</span>
+    <div className="flex h-full flex-col overflow-hidden border border-border bg-background">
+      <div className="flex items-start justify-between gap-2 border-b border-border px-2 py-1">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold">{activeActual.number || "черновик"}</span>
+            {activeActual.frontmatter.type && (
+              <span className="text-muted-foreground">[{activeActual.frontmatter.type}]</span>
+            )}
+            {activeActual.frontmatter.environment && (
+              <span className="text-muted-foreground">[{activeActual.frontmatter.environment}]</span>
+            )}
+            {activeActual.dirty && (
+              <span className="text-amber-600 dark:text-amber-400">● не синхронизировано</span>
+            )}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            {activeActual.frontmatter.author || "— без автора —"} · обновлено {fmtDate(activeActual.updatedAt)}
+          </div>
+          {activeActual.frontmatter.product.length > 0 && (
+            <div className="text-[11px]">продукты: {activeActual.frontmatter.product.join(", ")}</div>
           )}
         </div>
-        <div className="text-[11px] text-muted-foreground">
-          {activeActual.frontmatter.author || "— без автора —"} · обновлено {fmtDate(activeActual.updatedAt)}
-        </div>
-        {activeActual.frontmatter.product.length > 0 && (
-          <div className="text-[11px]">продукты: {activeActual.frontmatter.product.join(", ")}</div>
-        )}
+        <button
+          type="button"
+          onClick={() => setPreviewOpen(false)}
+          title="Закрыть предпросмотр (v, Esc)"
+          className="shrink-0 px-1 text-muted-foreground hover:text-foreground"
+        >
+          <X className="size-4" />
+        </button>
       </div>
-      <MarkdownView
-        body={activeActual.body}
-        attachments={activeActual.attachments}
-      />
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <MarkdownView
+          body={activeActual.body}
+          attachments={activeActual.attachments}
+        />
+      </div>
     </div>
   ) : (
     <div className="flex h-full items-center justify-center border border-border p-4 text-muted-foreground">

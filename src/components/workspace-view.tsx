@@ -593,7 +593,7 @@ export function WorkspaceView() {
 
           {visibleFolders.length > 0 && (tableView ? (
             showPreview ? (
-              <PanelGroup direction="horizontal" className="h-[70vh]">
+              <PanelGroup direction="horizontal" className="h-[calc(100vh-15rem)] min-h-[400px]">
                 <Panel defaultSize={33} minSize={15} className="min-w-0">
                   <div className="h-full overflow-y-auto rounded-md border">
                     {tableEl}
