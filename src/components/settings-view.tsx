@@ -195,7 +195,6 @@ export function SettingsView() {
   )
 
   const [profile, setProfile] = React.useState(config.profile)
-  const [recentLimit, setRecentLimit] = React.useState(config.recentLimit)
   const [tplContent, setTplContent] = React.useState(
     () => repoFiles[TEMPLATE_PATH] ?? ""
   )
@@ -203,7 +202,6 @@ export function SettingsView() {
   // синхронизировать локальный state при загрузке настроек и шаблона
   React.useEffect(() => {
     setProfile(config.profile)
-    setRecentLimit(config.recentLimit)
   }, [config])
 
   React.useEffect(() => {
@@ -219,7 +217,7 @@ export function SettingsView() {
 
   async function handleSave() {
     try {
-      await writeConfig({ ...config, profile, recentLimit })
+      await writeConfig({ ...config, profile })
       await writeTemplateFile(tplContent)
       toast({ title: "Настройки сохранены" })
     } catch (e) {
@@ -323,18 +321,6 @@ export function SettingsView() {
                 placeholder="iivanov@nota.tech"
               />
             </div>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="p-recent" className="text-xs">Локализаций в «Последние»</Label>
-            <Input
-              id="p-recent"
-              type="number"
-              min={1}
-              max={100}
-              className="h-8 w-24 text-sm"
-              value={recentLimit}
-              onChange={(e) => setRecentLimit(Math.max(1, parseInt(e.target.value, 10) || 3))}
-            />
           </div>
           <p className="text-[11px] text-muted-foreground">
             Хранится в настройках пользователя ОС, не в папке проекта.

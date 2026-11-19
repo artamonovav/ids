@@ -43,7 +43,7 @@ const TYPE_BADGE: Record<string, "destructive" | "secondary" | "outline"> = {
   Задача: "outline",
 }
 
-type Mode = "recent" | "drafts" | "all"
+type Mode = "drafts" | "all"
 
 /** Колонки таблицы, доступные для сортировки. */
 type SortKey =
@@ -114,14 +114,13 @@ export function WorkspaceView() {
   const clarify = useStore((s) => s.clarify)
   const removeFolderDrafts = useStore((s) => s.removeFolderDrafts)
   const removeFile = useStore((s) => s.removeFile)
-  const recentLimit = useStore((s) => s.config.recentLimit)
   const tableView = useStore((s) => s.config.tableView)
   const { toast } = useToast()
 
   const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null)
   const [q, setQ] = React.useState("")
   const [type, setType] = React.useState<"all" | Type>("all")
-  const [mode, setMode] = React.useState<Mode>("recent")
+  const [mode, setMode] = React.useState<Mode>("all")
   // Пагинация «Все»: перелистывание страниц вместо «показать ещё».
   const [page, setPage] = React.useState(1)
   // Сортировка таблицы по колонкам. По умолчанию — номер по убыванию
@@ -143,9 +142,6 @@ export function WorkspaceView() {
 
   const baseFolders = React.useMemo(() => {
     if (mode === "drafts") return []
-    if (mode === "recent") {
-      return [...folders].sort((a, b) => b.updatedAt - a.updatedAt)
-    }
     // «Все»: от самых новых к самым старым — по номеру дефекта по убыванию
     // (большие SPAS выше; при равенстве — по времени обновления).
     const num = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0
@@ -243,12 +239,12 @@ export function WorkspaceView() {
   }, [mode, q, type])
 
   const showTemps = mode === "drafts"
-  // «Последние» — recentLimit свежих; «Все» — перелистывающая пагинация.
+  // «Все» — перелистывающая пагинация; черновики показываются отдельно.
   const pages = Math.max(1, Math.ceil(sortedFolders.length / PAGE))
   const safePage = Math.min(page, pages)
   const visibleFolders =
-    mode === "recent"
-      ? filteredFolders.slice(0, recentLimit)
+    mode === "drafts"
+      ? []
       : sortedFolders.slice((safePage - 1) * PAGE, safePage * PAGE)
   const hasAny =
     visibleFolders.length > 0 || (showTemps && filteredTemps.length > 0)
@@ -317,11 +313,10 @@ export function WorkspaceView() {
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
           <TabsList className="h-8">
-            <TabsTrigger value="recent" className="text-xs">Последние</TabsTrigger>
+            <TabsTrigger value="all" className="text-xs">Все</TabsTrigger>
             <TabsTrigger value="drafts" className="text-xs">
               Черновики{draftsCount > 0 && ` (${draftsCount})`}
             </TabsTrigger>
-            <TabsTrigger value="all" className="text-xs">Все</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex flex-1 flex-col gap-2 sm:flex-row">
@@ -604,11 +599,6 @@ export function WorkspaceView() {
                 Вперёд ›
               </Button>
             </div>
-          )}
-          {mode === "recent" && filteredFolders.length > recentLimit && (
-            <p className="text-center text-[11px] text-muted-foreground">
-              Показано {visibleFolders.length} из {folders.length} в базе
-            </p>
           )}
         </>
       )}

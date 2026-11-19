@@ -123,12 +123,13 @@ export function TuiView() {
   )
 
   const term = q.trim().toLowerCase()
-  const items: {
+  interface Row {
     id: string
     open: () => void
     file: Localization
     render: () => React.ReactNode
-  }[] = React.useMemo(() => {
+  }
+  const items: Row[] = React.useMemo(() => {
     if (tab === "kb") {
       return folders
         .filter((f) => !term || rowText(f.main).includes(term))
@@ -141,7 +142,14 @@ export function TuiView() {
             file: f.main,
             render: () => (
               <>
-                <span className="w-24 lg:w-32 shrink-0 truncate font-semibold" title={f.number}>
+                <span
+                  className="w-24 lg:w-32 shrink-0 cursor-pointer truncate font-semibold hover:underline"
+                  title={`${f.number} — открыть`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    open()
+                  }}
+                >
                   {f.number}
                 </span>
                 <span className="w-16 sm:w-24 shrink-0 truncate text-muted-foreground" title={fm.type}>
@@ -175,7 +183,14 @@ export function TuiView() {
         file: f,
         render: () => (
           <>
-            <span className="w-24 lg:w-32 shrink-0 truncate font-semibold">
+            <span
+              className="w-24 lg:w-32 shrink-0 cursor-pointer truncate font-semibold hover:underline"
+              title={`${f.frontmatter.number || f.fileName} — открыть`}
+              onClick={(e) => {
+                e.stopPropagation()
+                open()
+              }}
+            >
               {f.frontmatter.number || "без номера"}
             </span>
             <span className="w-16 sm:w-24 shrink-0 text-muted-foreground">.tmp</span>
@@ -328,6 +343,21 @@ export function TuiView() {
     return () => window.removeEventListener("keydown", onKey)
   })
 
+  /** Заголовок колонок списка (общий для вкладок). */
+  const columnHeader = (
+    <div
+      className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background px-2 py-1 text-[11px] text-muted-foreground"
+      aria-hidden
+    >
+      <span className="w-24 lg:w-32 shrink-0">Номер</span>
+      <span className="w-16 sm:w-24 shrink-0">Тип</span>
+      <span className="w-12 md:w-20 shrink-0">Окр.</span>
+      <span className="hidden w-40 lg:block">Продукты</span>
+      <span className="w-14 shrink-0">Стат.</span>
+      <span className="flex-1">Симптом</span>
+    </div>
+  )
+
   const list = (
     <div
       ref={listRef}
@@ -335,6 +365,7 @@ export function TuiView() {
       role="listbox"
       aria-label="Список локализаций"
     >
+      {columnHeader}
       {items.length === 0 ? (
         <p className="px-2 py-4 text-muted-foreground">
           {term ? "Ничего не найдено. Esc — сбросить фильтр." : "Пусто. n — новый черновик."}
@@ -348,12 +379,10 @@ export function TuiView() {
             aria-selected={i === sel}
             tabIndex={0}
             onClick={() => {
-              // Клик по выбранной строке открывает; первый клик — выбирает
-              // (обновляет предпросмотр).
-              if (i === sel) item.open()
-              else setSel(i)
+              // Клик по любому полю (кроме номера) — выбор + предпросмотр.
+              setSel(i)
+              setPreviewOpen(true)
             }}
-            onDoubleClick={item.open}
             onFocus={() => setSel(i)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -513,11 +542,11 @@ export function TuiView() {
       <div className="min-h-0 flex-1">
         {previewOpen ? (
           <PanelGroup direction="horizontal" className="h-full">
-            <Panel defaultSize={67} minSize={25} className="min-w-0">
+            <Panel defaultSize={33} minSize={15} className="min-w-0">
               {list}
             </Panel>
             <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors rounded-none mx-0.5" />
-            <Panel defaultSize={33} minSize={15} className="min-w-0">
+            <Panel defaultSize={67} minSize={30} className="min-w-0">
               {preview}
             </Panel>
           </PanelGroup>
