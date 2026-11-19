@@ -273,6 +273,27 @@ export function EditorView() {
     }
   }, [fm, body, attachments])
 
+  // Backspace в TUI-режиме: выход из карточки на список. Только когда фокус
+  // вне полей ввода (в CodeMirror/Inputs Backspace редактирует текст) и
+  // карточка открыта в режиме просмотра — в редактировании выход терял бы правки.
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Backspace" || e.altKey || e.ctrlKey || e.metaKey) return
+      const el = e.target as HTMLElement | null
+      const editable =
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        !!el?.isContentEditable
+      if (editable) return
+      const st = useStore.getState()
+      if (!st.config.tuiMode || st.editing.mode !== "view") return
+      e.preventDefault()
+      closeEditor()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [closeEditor])
+
   /** Синхронизация из редактора — тот же сценарий, что из шапки/футера. */
   async function handleSync() {
     await sync()
