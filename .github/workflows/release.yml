@@ -25,9 +25,8 @@ jobs:
             # Только deb: AppImage не собираем (используем apt-установку).
             args: "--bundles deb"
           - platform: windows-latest
-            # Без установщиков (msi/nsis): Windows поставляется portable-зипом
-            # (сырой IDS.exe + README) — см. шаг ниже.
-            args: "--bundles none"
+            # tauri-action не запускается: бинарь собирается отдельным шагом
+            # (bun run tauri build --no-bundle) и отдаётся portable-зипом.
           - platform: macos-latest
             args: "--bundles app,dmg"
     runs-on: ${{ matrix.platform }}
@@ -193,7 +192,7 @@ jobs:
           fi
 
       - uses: tauri-apps/tauri-action@v0
-        if: steps.tauri_exists.outputs.exists == 'true'
+        if: steps.tauri_exists.outputs.exists == 'true' && matrix.platform != 'windows-latest'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # APPLE_* наследуются от предыдущего шага через $GITHUB_ENV
@@ -206,6 +205,12 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Windows: бинарь без пакетов (msi/nsis не собираются) — отдаётся
+      # portable-зипом (шаг ниже). Эквивалент tauri-action, но без bundler'ов.
+      - name: Build Windows binary (no bundle)
+        if: steps.tauri_exists.outputs.exists == 'true' && matrix.platform == 'windows-latest'
+        run: bun run tauri build --no-bundle
 
       # === Portable Windows build ===
       # Сырой .exe из target/release/ — без инсталлера, без записи в реестр, без
