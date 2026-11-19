@@ -228,7 +228,16 @@ export function AppShell() {
                   ? `Доступна версия ${update.latest} — открыть страницу релизов`
                   : undefined
               }
-              onClick={() => update && openUrl(update.url).catch(() => {})}
+              onClick={() =>
+                update &&
+                openUrl(update.url).catch((e) =>
+                  toast({
+                    title: "Не удалось открыть ссылку",
+                    description: String(e),
+                    variant: "destructive",
+                  })
+                )
+              }
             >
               v{version}
               {update ? ` → ${update.latest}` : ""}

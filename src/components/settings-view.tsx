@@ -449,7 +449,13 @@ export function SettingsView() {
               Проверить обновления
             </Button>
             {update && (
-              <Button size="sm" onClick={() => openUrl(update.url).catch(() => {})}>
+              <Button size="sm" onClick={() => openUrl(update.url).catch((e) =>
+                toast({
+                  title: "Не удалось открыть ссылку",
+                  description: String(e),
+                  variant: "destructive",
+                })
+              )}>
                 <ExternalLink className="size-4" />
                 Открыть страницу релизов (v{update.latest})
               </Button>
