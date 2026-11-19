@@ -22,8 +22,14 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
+            # Только deb: AppImage не собираем (используем apt-установку).
+            args: "--bundles deb"
           - platform: windows-latest
+            # Без установщиков (msi/nsis): Windows поставляется portable-зипом
+            # (сырой IDS.exe + README) — см. шаг ниже.
+            args: "--bundles none"
           - platform: macos-latest
+            args: "--bundles app,dmg"
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v5
@@ -199,6 +205,7 @@ jobs:
           releaseName: "IDS ${{ github.ref_name }}"
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}
 
       # === Portable Windows build ===
       # Сырой .exe из target/release/ — без инсталлера, без записи в реестр, без

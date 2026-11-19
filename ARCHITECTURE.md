@@ -664,8 +664,8 @@ flowchart TB
     end
 
     subgraph "Matrix (параллельно)"
-        LIN[ubuntu-22.04<br/>.deb + .AppImage]
-        WIN[windows-latest<br/>.msi + .exe + portable.zip]
+        LIN[ubuntu-22.04<br/>.deb]
+        WIN[windows-latest<br/>portable.zip]
         MAC[macos-latest<br/>.app + .dmg]
     end
 
@@ -690,8 +690,8 @@ flowchart TB
 
 | Платформа | Артефакты | Зависимости |
 |---|---|---|
-| **Linux** | `.deb`, `.AppImage` | libwebkit2gtk-4.1 (системная) |
-| **Windows** | `.msi` (инсталлер), `.exe` NSIS (инсталлер), `.zip` (portable) | WebView2 runtime (Win11 предустановлен, Win10 — bootstrapper) |
+| **Linux** | `.deb` | libwebkit2gtk-4.1 (системная) |
+| **Windows** | `.zip` (portable: сырой `IDS.exe` + README) | WebView2 runtime (Win11 предустановлен, Win10 — bootstrapper) |
 | **macOS** | `.app`, `.dmg` | WKWebView (системный). Unsigned → `xattr -cr`. Notarized → если APPLE_* secrets заданы |
 
 ### Шаги release.yml (14 шагов)
@@ -699,7 +699,7 @@ flowchart TB
 ```
 1.  actions/checkout
 2.  Проверка src-tauri
-3.  Ensure draft release (fail-fast on permission)
+3.  Ensure draft release (fail-fast on permission, описание из release_notes/<тег>.md)
 4.  oven-sh/setup-bun
 5.  actions/setup-node (v22)
 6.  dtolnay/rust-toolchain
@@ -708,7 +708,7 @@ flowchart TB
 9.  Generate icons (logo.svg → tauri icon)
 10. Set version from git tag (v0.2.0 → 0.2.0)
 11. Prepare macOS signing env (conditional APPLE_*)
-12. tauri-apps/tauri-action (build + upload to release)
+12. tauri-apps/tauri-action (build per platform: Linux → .deb, Windows → без бандлов, macOS → .app/.dmg)
 13. Package portable Windows zip [windows only]
 14. Upload portable zip to GitHub Release [windows only]
 ```
@@ -735,8 +735,8 @@ graph LR
 
 | Где | Как | Артефакт |
 |---|---|---|
-| Linux (Docker) | `docker compose --profile tauri run --rm tauri` → `bash build.sh` | `.deb`, `.AppImage` |
-| Windows | на Windows: `bash build.sh` | `.msi`, `.exe`, `.zip` |
+| Linux (Docker) | `docker compose --profile tauri run --rm tauri` → `bash build.sh` | `.deb` |
+| Windows | на Windows: `bash build.sh` | portable `.zip` |
 | macOS | на macOS: `bash build.sh` | `.app`, `.dmg` |
 | **CI (matrix)** | `git tag v* && git push origin v*` → release.yml | все 3 платформы |
 

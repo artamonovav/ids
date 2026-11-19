@@ -70,8 +70,8 @@ bash build.sh         # bun install + иконки + tauri build
 
 | ОС | Файлы |
 |---|---|
-| Linux | `src-tauri/target/release/bundle/{deb,appimage}/` |
-| Windows | `src-tauri/target/release/bundle/{msi,nsis}/` |
+| Linux | `src-tauri/target/release/bundle/deb/` |
+| Windows | portable `IDS-<версия>-portable-windows-x64.zip` (сырой `IDS.exe` + README, без установщиков) |
 | macOS | `src-tauri/target/release/bundle/{macos,dmg}/` |
 
 Кросс-компиляция между ОС не поддерживается: Tauri требует нативный Rust и
@@ -252,14 +252,15 @@ secret `RELEASE_TOKEN` и замена `GITHUB_TOKEN` → `RELEASE_TOKEN` в `re
 ## 5. CI / Автоматизация (GitHub Actions)
 
 ### 5.1 `ci.yml` — проверка фронтенда
-Запускается на push в `main`/`master` и на PR. Ставит Bun, делает
-`bun install --frozen-lockfile` и `bun run build`. Rust не нужен.
+Запускается на push в `main`/`master` и на PR. Ставит Bun, проверяет типы
+(`tsc --noEmit`) и собирает фронтенд (`bun run build`). Rust не нужен.
 
 ### 5.2 `release.yml` — сборка бинарников (Windows / macOS / Linux)
 Запускается при создании git-тега вида `v*`. На каждой ОС ставится Rust (на
 Linux — +WebKitGTK), собирается Tauri через `tauri-apps/tauri-action`, и
-артефакты (`.msi`/`.exe`, `.app`/`.dmg`, `.deb`/`.AppImage`, portable `.zip` для
-Windows) прикладываются к GitHub Release как черновик.
+артефакты (`.deb` для Linux, portable `.zip` для Windows, `.app`/`.dmg` для
+macOS) прикладываются к GitHub Release как черновик. Описание релиза берётся
+из `release_notes/<тег>.md`.
 
 ### 5.3 Как выпустить релиз
 ```bash
