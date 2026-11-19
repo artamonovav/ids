@@ -136,9 +136,10 @@ export function TuiView() {
         .map((f) => {
           const fm = f.main.frontmatter
           const dirty = f.files.some((x) => x.dirty)
+          const open = () => openFolder(f.number)
           return {
             id: f.number,
-            open: () => openFolder(f.number),
+            open,
             file: f.main,
             render: () => (
               <>
@@ -177,10 +178,12 @@ export function TuiView() {
           rowText(f).includes(term) ||
           f.fileName.toLowerCase().includes(term)
       )
-      .map((f) => ({
-        id: f.id,
-        open: () => openFile(f.id),
-        file: f,
+      .map((f) => {
+        const open = () => openFile(f.id)
+        return {
+          id: f.id,
+          open,
+          file: f,
         render: () => (
           <>
             <span
@@ -206,7 +209,8 @@ export function TuiView() {
             <span className="flex-1 min-w-0 truncate">{f.frontmatter.symptom || "— без симптома —"}</span>
           </>
         ),
-      }))
+        }
+      })
   }, [tab, folders, drafts, term, openFolder, openFile])
 
   // Фильтр/вкладка изменились → курсор в начало.

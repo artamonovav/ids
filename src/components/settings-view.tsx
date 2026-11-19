@@ -406,9 +406,14 @@ export function SettingsView() {
               <p className="text-[11px] text-muted-foreground">
                 В графическом режиме: плотная таблица вместо карточек
                 (номер, тип, окружение, продукты, симптом, автор, обновлено).
+                {config.tuiMode && " Недоступно при включённом TUI-режиме."}
               </p>
             </div>
-            <Switch checked={config.tableView} onCheckedChange={(v) => setTableView(v)} />
+            <Switch
+              checked={config.tuiMode ? false : config.tableView}
+              disabled={config.tuiMode}
+              onCheckedChange={(v) => setTableView(v)}
+            />
           </div>
           <Separator />
           <div className="flex items-center justify-between gap-3">

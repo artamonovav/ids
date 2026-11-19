@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useStore, selectFolders } from "@/lib/store"
+import { useStore, selectFolders, loadAttachments } from "@/lib/store"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -12,6 +12,9 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { MarkdownView } from "@/components/markdown-preview"
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels"
+import { Eye, EyeOff, X } from "lucide-react"
 import {
   Search,
   Plus,
@@ -123,6 +126,9 @@ export function WorkspaceView() {
   const [mode, setMode] = React.useState<Mode>("all")
   // Пагинация «Все»: перелистывание страниц вместо «показать ещё».
   const [page, setPage] = React.useState(1)
+  // Шторка предпросмотра в табличном режиме (клик по полям, кроме номера).
+  const [activeNumber, setActiveNumber] = React.useState<string | null>(null)
+  const [previewOpen, setPreviewOpen] = React.useState(false)
   // Сортировка таблицы по колонкам. По умолчанию — номер по убыванию
   // (от больших SPAS к меньшим).
   const [sortKey, setSortKey] = React.useState<SortKey>("number")
@@ -249,6 +255,29 @@ export function WorkspaceView() {
   const hasAny =
     visibleFolders.length > 0 || (showTemps && filteredTemps.length > 0)
 
+  // Шторка предпросмотра — только в табличном режиме и не на «Черновиках».
+  const showPreview = tableView && previewOpen && mode !== "drafts"
+
+  const activeFolder = React.useMemo(
+    () =>
+      activeNumber
+        ? folders.find((f) => f.number === activeNumber) ?? null
+        : null,
+    [activeNumber, folders]
+  )
+  const activeMain = activeFolder?.main ?? null
+
+  // Предпросмотр открыт → грузим вложения активной записи (картинки в теле).
+  React.useEffect(() => {
+    if (!showPreview || !activeMain) return
+    void loadAttachments(activeMain.number, activeMain.id)
+  }, [showPreview, activeMain?.id, activeMain?.number])
+
+  // Файл перезаписан в store (автосохранение/синк) — актуальная версия.
+  const activeActual = activeMain
+    ? files.find((f) => f.id === activeMain.id) ?? activeMain
+    : null
+
   function handleClarify(number: string) {
     const main = useStore.getState().files.find((f) => f.number === number && f.fileName === "localization.md")
       ?? useStore.getState().files.find((f) => f.number === number)
@@ -286,6 +315,125 @@ export function WorkspaceView() {
       },
     })
   }
+
+  /** Таблица локализаций (табличный режим). */
+  const tableEl = (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-sm">
+<thead>
+                  <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
+                    {(
+                      [
+                        ["number", "Номер", "px-3 py-2"],
+                        ["type", "Тип", "px-2 py-2"],
+                        ["environment", "Окр.", "px-2 py-2"],
+                        ["product", "Продукты", "px-2 py-2"],
+                        ["symptom", "Симптом", "px-2 py-2"],
+                        ["author", "Автор", "hidden px-2 py-2 lg:table-cell"],
+                        ["updatedAt", "Обновлено", "px-2 py-2 text-right"],
+                      ] as const
+                    ).map(([key, label, cls]) => (
+                      <th
+                        key={key}
+                        scope="col"
+                        className={`cursor-pointer select-none whitespace-nowrap font-medium hover:text-foreground ${cls}`}
+                        onClick={() => toggleSort(key)}
+                        title="Сортировать"
+                      >
+                        {label}
+                        {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleFolders.map((f) => {
+                    const fm = f.main.frontmatter
+                    const dirty = f.files.some((x) => x.dirty)
+                    return (
+                      <tr
+                        key={f.number}
+                        className={`cursor-pointer border-b transition-colors last:border-0 hover:bg-accent/50 ${
+                          activeNumber === f.number ? "bg-accent/40" : ""
+                        }`}
+                        onClick={() => {
+                          // Клик по строке — выбор + предпросмотр; номер — открыть.
+                          setActiveNumber(f.number)
+                          setPreviewOpen(true)
+                        }}
+                        onDoubleClick={() => openFolder(f.number)}
+                      >
+                        <td
+                          className="whitespace-nowrap px-3 py-1.5 font-mono font-semibold hover:underline"
+                          title={`Открыть ${f.number}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openFolder(f.number)
+                          }}
+                        >
+                          {f.number}
+                          {dirty && (
+                            <span
+                              className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
+                              title="Несинхронизировано"
+                            />
+                          )}
+                          {f.files.length > 1 && (
+                            <span className="ml-1 text-[11px] text-muted-foreground">+{f.files.length - 1}</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5">{fm.type}</td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-muted-foreground">{fm.environment}</td>
+                        <td className="max-w-40 truncate px-2 py-1.5 font-mono text-xs text-muted-foreground" title={fm.product.join(", ")}>
+                          {fm.product.join(", ")}
+                        </td>
+                        <td className="max-w-md truncate px-2 py-1.5">{fm.symptom || "— без описания симптома —"}</td>
+                        <td className="hidden max-w-44 truncate px-2 py-1.5 text-xs text-muted-foreground lg:table-cell">
+                          {fm.author || "— без автора —"}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground">
+                          {fmtDate(f.updatedAt)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+  )
+
+  /** Шторка предпросмотра активной записи (табличный режим). */
+  const previewPanel = activeActual ? (
+    <div className="flex h-full flex-col overflow-hidden border border-border bg-background">
+      <div className="flex items-start justify-between gap-2 border-b px-3 py-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm font-semibold">{activeActual.number}</span>
+            {activeActual.frontmatter.type && (
+              <Badge variant="outline">{activeActual.frontmatter.type}</Badge>
+            )}
+            <Badge variant="outline">{activeActual.frontmatter.environment}</Badge>
+            {activeActual.dirty && (
+              <span className="size-2 rounded-full bg-amber-500" title="Несинхронизировано" />
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {activeActual.frontmatter.author || "— без автора —"} · обновлено {fmtDate(activeActual.updatedAt)}
+          </p>
+        </div>
+        <Button variant="ghost" size="icon" className="size-6 shrink-0" onClick={() => setPreviewOpen(false)} aria-label="Закрыть предпросмотр">
+          <X className="size-4" />
+        </Button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <MarkdownView body={activeActual.body} attachments={activeActual.attachments} />
+      </div>
+    </div>
+  ) : (
+    <div className="flex h-full items-center justify-center border border-border p-4 text-muted-foreground">
+      Кликните по строке таблицы.
+    </div>
+  )
 
   return (
     <div className="space-y-4">
@@ -340,6 +488,18 @@ export function WorkspaceView() {
               <SelectItem value="Задача">Задача</SelectItem>
             </SelectContent>
           </Select>
+          {tableView && mode !== "drafts" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setPreviewOpen((p) => !p)}
+              title={previewOpen ? "Скрыть предпросмотр" : "Предпросмотр Markdown"}
+            >
+              {previewOpen ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              <span className="hidden sm:inline">Предпросмотр</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -432,75 +592,21 @@ export function WorkspaceView() {
           )}
 
           {visibleFolders.length > 0 && (tableView ? (
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
-                    {(
-                      [
-                        ["number", "Номер", "px-3 py-2"],
-                        ["type", "Тип", "px-2 py-2"],
-                        ["environment", "Окр.", "px-2 py-2"],
-                        ["product", "Продукты", "px-2 py-2"],
-                        ["symptom", "Симптом", "px-2 py-2"],
-                        ["author", "Автор", "hidden px-2 py-2 lg:table-cell"],
-                        ["updatedAt", "Обновлено", "px-2 py-2 text-right"],
-                      ] as const
-                    ).map(([key, label, cls]) => (
-                      <th
-                        key={key}
-                        scope="col"
-                        className={`cursor-pointer select-none whitespace-nowrap font-medium hover:text-foreground ${cls}`}
-                        onClick={() => toggleSort(key)}
-                        title="Сортировать"
-                      >
-                        {label}
-                        {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleFolders.map((f) => {
-                    const fm = f.main.frontmatter
-                    const dirty = f.files.some((x) => x.dirty)
-                    return (
-                      <tr
-                        key={f.number}
-                        className="cursor-pointer border-b transition-colors last:border-0 hover:bg-accent/50"
-                        onClick={() => openFolder(f.number)}
-                        title={`Открыть ${f.number}`}
-                      >
-                        <td className="whitespace-nowrap px-3 py-1.5 font-mono font-semibold">
-                          {f.number}
-                          {dirty && (
-                            <span
-                              className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
-                              title="Несинхронизировано"
-                            />
-                          )}
-                          {f.files.length > 1 && (
-                            <span className="ml-1 text-[11px] text-muted-foreground">+{f.files.length - 1}</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5">{fm.type}</td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-muted-foreground">{fm.environment}</td>
-                        <td className="max-w-40 truncate px-2 py-1.5 font-mono text-xs text-muted-foreground" title={fm.product.join(", ")}>
-                          {fm.product.join(", ")}
-                        </td>
-                        <td className="max-w-md truncate px-2 py-1.5">{fm.symptom || "— без описания симптома —"}</td>
-                        <td className="hidden max-w-44 truncate px-2 py-1.5 text-xs text-muted-foreground lg:table-cell">
-                          {fm.author || "— без автора —"}
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground">
-                          {fmtDate(f.updatedAt)}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            showPreview ? (
+              <PanelGroup direction="horizontal" className="h-[70vh]">
+                <Panel defaultSize={33} minSize={15} className="min-w-0">
+                  <div className="h-full overflow-y-auto rounded-md border">
+                    {tableEl}
+                  </div>
+                </Panel>
+                <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors rounded-none mx-0.5" />
+                <Panel defaultSize={67} minSize={30} className="min-w-0">
+                  {previewPanel}
+                </Panel>
+              </PanelGroup>
+            ) : (
+              tableEl
+            )
           ) : (
             <div className="grid gap-2">
               {visibleFolders.map((f) => {
