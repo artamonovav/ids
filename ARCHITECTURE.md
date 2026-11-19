@@ -874,9 +874,11 @@ graph LR
 ```
 
 Subpixel antialiasing в WebKit2GTK вызывает мерцание веса текста при наборе.
-Фикс (grayscale AA + `optimizeSpeed`) применяется в двух местах: `TEXTAREA_CLASS`
-в `markdown-editor.tsx` (readOnly-исходник) и тема `markdownEditorTheme` в
-`markdown-live-preview.ts` (Live/Исходник — основная поверхность ввода).
+Фикс (grayscale AA + `optimizeSpeed`) применён **глобально** в `globals.css`
+(`html { -webkit-font-smoothing: antialiased; text-rendering: optimizeSpeed }`)
+и покрывает всё приложение; точечные применения (TEXTAREA_CLASS в
+`markdown-editor.tsx`, тема `markdownEditorTheme` в `markdown-live-preview.ts`)
+сохранены для явности.
 
 ## 6. Журнал работы и git
 

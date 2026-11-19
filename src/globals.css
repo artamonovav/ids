@@ -690,6 +690,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Сглаживание шрифтов глобально: на Linux/WebKit2GTK (Ubuntu 22.04)
+     subpixel AA мерцает весом текста (жирный ↔ нормальный) при любой
+     перерисовке и выглядит грубо. Grayscale AA стабилен. Раньше фикс был
+     только в редакторе (TEXTAREA_CLASS + тема CodeMirror) — его не хватало. */
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* как и в редакторе (2cfb3f7): стабилизирует отрисовку веса текста */
+    text-rendering: optimizeSpeed;
+  }
 }
 
 /* ---------------------------------------------------------------------------
