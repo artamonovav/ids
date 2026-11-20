@@ -249,6 +249,47 @@ export function WorkspaceView() {
   // скроллится внутри своей области на весь отфильтрованный список.
   const fixedLayout = tableView && mode !== "drafts"
 
+  // Виртуализация таблицы: рендерятся только видимые строки (+запас),
+  // позиция по scrollTop; высота строки измеряется по факту (borders/padding).
+  const ROW_H_DEFAULT = 34
+  const OVERSCAN = 10
+  const scrollRef = React.useRef<HTMLDivElement | null>(null)
+  const [scrollTop, setScrollTop] = React.useState(0)
+  const [scrollH, setScrollH] = React.useState(600)
+  const [rowH, setRowH] = React.useState(ROW_H_DEFAULT)
+  const onTableScroll = React.useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    setScrollTop(el.scrollTop)
+    setScrollH(el.clientHeight)
+  }, [])
+  // Измерить высоту первой строки данных (зависит от плотности/шрифта).
+  React.useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const tr = el.querySelector<HTMLElement>("tbody tr")
+    if (tr) {
+      const h = Math.round(tr.getBoundingClientRect().height)
+      if (h > 0) setRowH(h)
+    }
+    setScrollH(el.clientHeight)
+  }, [visibleFolders.length, showPreview])
+  // Ресайз окна — пересчитать видимую область
+  React.useEffect(() => {
+    const onResize = () => {
+      const el = scrollRef.current
+      if (el) setScrollH(el.clientHeight)
+    }
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+  const winStart = Math.max(0, Math.floor(scrollTop / rowH) - OVERSCAN)
+  const winEnd = Math.min(
+    visibleFolders.length,
+    Math.ceil((scrollTop + scrollH) / rowH) + OVERSCAN
+  )
+  const topPad = winStart * rowH
+  const bottomPad = Math.max(0, visibleFolders.length - winEnd) * rowH
+
   const activeFolder = React.useMemo(
     () =>
       activeNumber
@@ -341,7 +382,12 @@ export function WorkspaceView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleFolders.map((f) => {
+                  {topPad > 0 && (
+                    <tr aria-hidden>
+                      <td colSpan={8} style={{ height: topPad }} />
+                    </tr>
+                  )}
+                  {visibleFolders.slice(winStart, winEnd).map((f) => {
                     const fm = f.main.frontmatter
                     const dirty = f.files.some((x) => x.dirty)
                     return (
@@ -391,6 +437,11 @@ export function WorkspaceView() {
                       </tr>
                     )
                   })}
+                  {bottomPad > 0 && (
+                    <tr aria-hidden>
+                      <td colSpan={8} style={{ height: bottomPad }} />
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

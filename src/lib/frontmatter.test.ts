@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { serializeDocument, parseFrontmatter } from "./frontmatter"
 import { EMPTY_FRONTMATTER } from "./template"
-import type { Frontmatter } from "../types"
+import type { Frontmatter } from "../lib/types"
 
 const fm: Frontmatter = {
   number: "SPAS-0001",

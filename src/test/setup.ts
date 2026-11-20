@@ -3,7 +3,7 @@
 import { vi } from "vitest"
 import type { ReactNode } from "react"
 
-export const invokeMock = vi.fn(async (cmd: string) => {
+export const invokeMock = vi.fn(async (cmd: string, _args?: unknown) => {
   // Разумные значения по умолчанию, чтобы компоненты рендерились без крашей
   switch (cmd) {
     case "read_repo_files":
