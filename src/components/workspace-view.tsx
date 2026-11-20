@@ -344,6 +344,9 @@ export function WorkspaceView() {
                         {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
                       </th>
                     ))}
+                    <th scope="col" className="px-2 py-2 text-right font-medium" title="Файлов в папке">
+                      Файлы
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -378,9 +381,6 @@ export function WorkspaceView() {
                               title="Несинхронизировано"
                             />
                           )}
-                          {f.files.length > 1 && (
-                            <span className="ml-1 text-[11px] text-muted-foreground">+{f.files.length - 1}</span>
-                          )}
                         </td>
                         <td className="whitespace-nowrap px-2 py-1.5">{fm.type}</td>
                         <td className="whitespace-nowrap px-2 py-1.5 text-muted-foreground">{fm.environment}</td>
@@ -393,6 +393,9 @@ export function WorkspaceView() {
                         </td>
                         <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground">
                           {fmtDate(f.updatedAt)}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground" title="Файлов в папке">
+                          {f.files.length}
                         </td>
                       </tr>
                     )

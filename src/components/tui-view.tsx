@@ -272,6 +272,12 @@ export function TuiView() {
                   }}
                 >
                   {f.number}
+                  {dirty && (
+                    <span
+                      className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
+                      title="Несинхронизировано"
+                    />
+                  )}
                 </span>
                 <span className="w-16 sm:w-24 shrink-0 truncate text-muted-foreground" title={fm.type}>
                   {fm.type || "—"}
@@ -279,13 +285,22 @@ export function TuiView() {
                 <span className="w-12 md:w-20 shrink-0 truncate text-muted-foreground" title={fm.environment}>
                   {fm.environment || "—"}
                 </span>
-                <span className="w-0 lg:w-40 lg:shrink-0 lg:truncate" title={fm.product.join(", ")}>
+                <span className="hidden w-28 lg:w-40 shrink-0 truncate lg:block" title={fm.product.join(", ")}>
                   {fm.product.join(" ") || "—"}
                 </span>
-                <span className={`w-14 shrink-0 ${dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
-                  {dirty ? "● изм." : f.files.length > 1 ? `+${f.files.length - 1} ф.` : ""}
-                </span>
                 <span className="flex-1 min-w-0 truncate">{fm.symptom || "— без симптома —"}</span>
+                <span className="hidden w-36 shrink-0 truncate text-muted-foreground lg:block" title={fm.author}>
+                  {fm.author || "—"}
+                </span>
+                <span
+                  className="hidden w-24 shrink-0 text-right text-[11px] text-muted-foreground sm:block"
+                  title={`Обновлено ${fmtDate(f.updatedAt)}`}
+                >
+                  {fmtShort(f.updatedAt)}
+                </span>
+                <span className="w-10 shrink-0 text-right text-[11px] text-muted-foreground" title="Файлов в папке">
+                  {f.files.length}
+                </span>
               </>
             ),
           }
@@ -334,6 +349,7 @@ export function TuiView() {
             >
               {fmtShort(f.updatedAt)}
             </span>
+            <span className="w-10 shrink-0 text-right text-[11px] text-muted-foreground">1</span>
           </>
         ),
         }
@@ -545,6 +561,9 @@ export function TuiView() {
           {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
         </button>
       ))}
+      <span className="w-10 shrink-0 text-right" title="Файлов в папке">
+        Файлы
+      </span>
     </div>
   )
 
