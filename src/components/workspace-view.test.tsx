@@ -27,7 +27,6 @@ describe("WorkspaceView: табличный режим", () => {
       "Симптом",
       "Автор",
       "Обновлено",
-      "Файлы",
     ])
   })
 
@@ -38,6 +37,11 @@ describe("WorkspaceView: табличный режим", () => {
       screen.getAllByRole("columnheader").length
     )
     expect(screen.getByText("SPAS-0003")).toBeTruthy()
+  })
+
+  it("колонки «Файлы» нет в таблице (убрана)", () => {
+    render(<WorkspaceView />)
+    expect(screen.queryByTitle("Файлов в папке")).toBeNull()
   })
 
   it("пагинации нет — весь список в таблице", () => {
@@ -60,19 +64,7 @@ describe("WorkspaceView: табличный режим", () => {
     expect(screen.getByText(/Шаги воспроизведения/)).toBeTruthy()
   })
 
-  it("«Файлы» показывает число файлов папки", () => {
-    useStore.setState({
-      files: [
-        ...useStore
-          .getState()
-          .files.filter((f) => f.number !== "SPAS-0001"),
-        ...makeLocalization("SPAS-0001", { extraFiles: 3 }),
-      ],
-    })
-    render(<WorkspaceView />)
-    const cells = screen.getAllByText("3")
-    expect(cells.length).toBeGreaterThan(0)
-  })
+
 })
 
 describe("WorkspaceView:(cards)", () => {

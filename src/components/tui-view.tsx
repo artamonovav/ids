@@ -305,13 +305,10 @@ export function TuiView() {
                   {fm.author || "—"}
                 </span>
                 <span
-                  className="hidden w-24 shrink-0 text-right text-[11px] text-muted-foreground sm:block"
+                  className="hidden w-32 shrink-0 text-right text-[11px] text-muted-foreground sm:block"
                   title={`Обновлено ${fmtDate(f.updatedAt)}`}
                 >
                   {fmtShort(f.updatedAt)}
-                </span>
-                <span className="w-10 shrink-0 text-right text-[11px] text-muted-foreground" title="Файлов в папке">
-                  {f.files.length}
                 </span>
               </>
             ),
@@ -356,12 +353,11 @@ export function TuiView() {
               {f.frontmatter.author || "—"}
             </span>
             <span
-              className="hidden w-24 shrink-0 text-right text-[11px] text-muted-foreground sm:block"
+              className="hidden w-32 shrink-0 text-right text-[11px] text-muted-foreground sm:block"
               title={`Обновлено ${fmtDate(f.updatedAt)}`}
             >
               {fmtShort(f.updatedAt)}
             </span>
-            <span className="w-10 shrink-0 text-right text-[11px] text-muted-foreground">1</span>
           </>
         ),
         }
@@ -570,9 +566,7 @@ export function TuiView() {
           {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
         </button>
       ))}
-      <span className="w-10 shrink-0 text-right" title="Файлов в папке">
-        Файлы
-      </span>
+
     </div>
   )
 

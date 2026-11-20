@@ -360,7 +360,7 @@ export function WorkspaceView() {
                         ["product", "Продукты", "px-2 py-2"],
                         ["symptom", "Симптом", "px-2 py-2"],
                         ["author", "Автор", "hidden px-2 py-2 lg:table-cell"],
-                        ["updatedAt", "Обновлено", "px-2 py-2 text-right"],
+                        ["updatedAt", "Обновлено", "px-2 py-2 text-right min-w-[10rem]"],
                       ] as const
                     ).map(([key, label, cls]) => (
                       <th
@@ -374,9 +374,6 @@ export function WorkspaceView() {
                         {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
                       </th>
                     ))}
-                    <th scope="col" className="px-2 py-2 text-right font-medium" title="Файлов в папке">
-                      Файлы
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -426,11 +423,8 @@ export function WorkspaceView() {
                         <td className="hidden max-w-44 truncate px-2 py-1.5 text-xs text-muted-foreground lg:table-cell">
                           {fm.author || "— без автора —"}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground">
+                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground min-w-[10rem]">
                           {fmtDate(f.updatedAt)}
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground" title="Файлов в папке">
-                          {f.files.length}
                         </td>
                       </tr>
                     )
