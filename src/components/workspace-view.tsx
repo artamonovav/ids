@@ -439,7 +439,7 @@ export function WorkspaceView() {
   // панели занимают остаток, элементы управления и пагинация всегда видны
   // (страница не скроллится). Без шторки — обычный поток.
   return (
-    <div className={showPreview ? "flex h-[calc(100vh-8rem)] flex-col gap-3" : "space-y-4"}>
+    <div className={showPreview ? "flex h-[calc(100vh-7.5rem)] flex-col gap-3" : "space-y-4"}>
       <div className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${showPreview ? "shrink-0" : ""}`}>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Локализации проблем</h1>

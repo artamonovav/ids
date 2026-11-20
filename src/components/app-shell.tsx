@@ -212,12 +212,14 @@ export function AppShell() {
   if (!setupComplete) return <SetupWizard />
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <GitIdentityDialog />
       {/* Шапка без backdrop-blur: на Linux/WebKitGTK (программный рендеринг)
           блюр липкого элемента пересчитывается на каждый кадр прокрутки и
           вызывает сильные лаги (особенно на длинных страницах — настройки). */}
-      <header className="sticky top-0 z-40 border-b bg-background">
+      {/* Шапка/футер — обычные flex-элементы (не sticky): скроллится только
+          main между ними, поэтому полоса прокрутки не пересекает их. */}
+      <header className="z-40 border-b bg-background">
         {/* Резиновая ширина: без max-w-7xl — и в GUI, и в TUI-режиме */}
         <div className="flex h-12 w-full items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex items-center gap-2">
@@ -259,14 +261,14 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="w-full flex-1 px-4 py-4 sm:px-6">
+      <main className="w-full min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
         {view === "workspace" && (tuiMode ? <TuiView /> : <WorkspaceView />)}
         {view === "editor" && <EditorView />}
         {view === "settings" && <SettingsView />}
         {view === "logs" && <LogsView />}
       </main>
 
-      <footer className="sticky bottom-0 z-40 border-t bg-background">
+      <footer className="z-40 border-t bg-background">
         <div className="flex h-10 w-full items-center justify-between gap-2 px-4 sm:px-6">
           <StatusPill />
           {version && (

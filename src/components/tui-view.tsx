@@ -521,7 +521,7 @@ export function TuiView() {
    *  прокрутке. Общий для вкладок. */
   const columnHeader = (
     <div
-      className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background px-2 py-1 text-[11px] text-muted-foreground"
+      className="flex h-6 items-center gap-2 border-b border-border bg-background px-2 text-[11px] text-muted-foreground"
     >
       {(
         [
@@ -549,12 +549,12 @@ export function TuiView() {
   )
 
   const list = (
-    <div className="flex min-h-0 flex-1 flex-col border border-border">
+    <div className="relative min-h-0 flex-1 border border-border">
       {columnHeader}
       <div
         ref={listRef}
         onScroll={onListScroll}
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="absolute inset-x-0 bottom-0 top-6 overflow-y-auto"
         role="listbox"
         aria-label="Список локализаций"
       >
@@ -646,7 +646,7 @@ export function TuiView() {
   )
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col gap-1.5 font-mono text-[13px] leading-relaxed">
+    <div className="flex h-[calc(100vh-7.5rem)] flex-col gap-1.5 overflow-hidden font-mono text-[13px] leading-relaxed">
       {/* Шапка */}
       <div className="border border-border px-2 py-1">
         <div className="flex items-center justify-between gap-2">
