@@ -28,14 +28,15 @@ import type { Localization } from "@/lib/types"
 
 type Tab = "kb" | "tmp"
 
-/** Колонки TUI-списка, доступные для сортировки. */
+/** Колонки TUI-списка — тот же состав, что в GUI-таблице. */
 type SortKey =
   | "number"
   | "type"
   | "environment"
   | "product"
-  | "status"
   | "symptom"
+  | "author"
+  | "updatedAt"
 
 const STATUS_MAP = {
   green: { text: "СИНХРОНИЗИРОВАНО", cls: "text-emerald-600 dark:text-emerald-400" },
@@ -47,6 +48,16 @@ const STATUS_MAP = {
 function shortenPath(p: string): string {
   const home = p.match(/^\/home\/[^/]+/)
   return home ? p.replace(home[0], "~") : p
+}
+
+function fmtShort(ts: number): string {
+  return new Date(ts).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Moscow",
+  })
 }
 
 function fmtDate(ts: number): string {
@@ -128,6 +139,15 @@ export function TuiView() {
             (parseInt(a.number.replace(/\D/g, ""), 10) || 0) -
             (parseInt(b.number.replace(/\D/g, ""), 10) || 0)
           break
+        case "updatedAt":
+          r = a.updatedAt - b.updatedAt
+          break
+        case "author":
+          r = (a.frontmatter.author || "").localeCompare(
+            b.frontmatter.author || "",
+            "ru"
+          )
+          break
         case "type":
           r = (a.frontmatter.type || "").localeCompare(b.frontmatter.type || "", "ru")
           break
@@ -141,10 +161,6 @@ export function TuiView() {
           r = a.frontmatter.product
             .join(", ")
             .localeCompare(b.frontmatter.product.join(", "), "ru")
-          break
-        case "status":
-          r =
-            Number(a.dirty || !a.number) - Number(b.dirty || !b.number)
           break
         case "symptom":
           r = (a.frontmatter.symptom || "").localeCompare(
@@ -161,8 +177,8 @@ export function TuiView() {
   /** Компаратор папок (вкладка «Локализации») — статусы берутся из файлов. */
   const cmpFolder = React.useCallback(
     (
-      a: { number: string; files: Localization[]; main: Localization },
-      b: { number: string; files: Localization[]; main: Localization },
+      a: { number: string; files: Localization[]; main: Localization; updatedAt: number },
+      b: { number: string; files: Localization[]; main: Localization; updatedAt: number },
     ): number => {
       let r = 0
       const num = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0
@@ -187,10 +203,14 @@ export function TuiView() {
             .join(", ")
             .localeCompare(b.main.frontmatter.product.join(", "), "ru")
           break
-        case "status":
-          r =
-            Number(a.files.some((x) => x.dirty)) -
-            Number(b.files.some((x) => x.dirty))
+        case "updatedAt":
+          r = a.updatedAt - b.updatedAt
+          break
+        case "author":
+          r = (a.main.frontmatter.author || "").localeCompare(
+            b.main.frontmatter.author || "",
+            "ru"
+          )
           break
         case "symptom":
           r = (a.main.frontmatter.symptom || "").localeCompare(
@@ -211,7 +231,7 @@ export function TuiView() {
       setSortDir((d) => (d === 1 ? -1 : 1))
     } else {
       setSortKey(key)
-      setSortDir(key === "number" || key === "status" ? -1 : 1)
+      setSortDir(key === "number" || key === "updatedAt" ? -1 : 1)
     }
     setSel(0)
   }
@@ -289,25 +309,31 @@ export function TuiView() {
           <>
             <span
               className="w-24 lg:w-32 shrink-0 cursor-pointer truncate font-semibold hover:underline"
-              title={`${f.frontmatter.number || f.fileName} — открыть`}
+              title={`${f.fileName} — открыть`}
               onClick={(e) => {
                 e.stopPropagation()
                 open()
               }}
             >
-              {f.frontmatter.number || "без номера"}
+              {f.frontmatter.number || f.fileName}
             </span>
-            <span className="w-16 sm:w-24 shrink-0 text-muted-foreground">.tmp</span>
+            <span className="w-16 sm:w-24 shrink-0 truncate text-muted-foreground">.tmp</span>
             <span className="w-12 md:w-20 shrink-0 truncate text-muted-foreground">
               {f.frontmatter.type || "—"}
             </span>
-            <span className="w-0 lg:w-40 lg:shrink-0 lg:truncate text-muted-foreground" title={f.fileName}>
-              {f.fileName}
-            </span>
-            <span className={`w-14 shrink-0 ${f.dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
-              {f.dirty ? "● изм." : ""}
+            <span className="hidden w-28 lg:w-40 shrink-0 truncate lg:block" title={f.frontmatter.product.join(", ")}>
+              {f.frontmatter.product.join(" ") || "—"}
             </span>
             <span className="flex-1 min-w-0 truncate">{f.frontmatter.symptom || "— без симптома —"}</span>
+            <span className="hidden w-36 shrink-0 truncate text-muted-foreground lg:block" title={f.frontmatter.author}>
+              {f.frontmatter.author || "—"}
+            </span>
+            <span
+              className="hidden w-24 shrink-0 text-right text-[11px] text-muted-foreground sm:block"
+              title={`Обновлено ${fmtDate(f.updatedAt)}`}
+            >
+              {fmtShort(f.updatedAt)}
+            </span>
           </>
         ),
         }
@@ -502,9 +528,10 @@ export function TuiView() {
           ["number", "Номер", "w-24 lg:w-32 shrink-0"],
           ["type", "Тип", "w-16 sm:w-24 shrink-0"],
           ["environment", "Окр.", "w-12 md:w-20 shrink-0"],
-          ["product", "Продукты", "hidden w-40 lg:block"],
-          ["status", "Стат.", "w-14 shrink-0"],
+          ["product", "Продукты", "hidden w-40 shrink-0 lg:block"],
           ["symptom", "Симптом", "flex-1"],
+          ["author", "Автор", "hidden w-36 shrink-0 lg:block"],
+          ["updatedAt", "Обновлено", "hidden w-24 shrink-0 text-right sm:block"],
         ] as const
       ).map(([key, label, cls]) => (
         <button
@@ -619,7 +646,7 @@ export function TuiView() {
   )
 
   return (
-    <div className="flex h-[calc(100vh-10rem)] flex-col gap-1.5 font-mono text-[13px] leading-relaxed">
+    <div className="flex h-[calc(100vh-8rem)] flex-col gap-1.5 font-mono text-[13px] leading-relaxed">
       {/* Шапка */}
       <div className="border border-border px-2 py-1">
         <div className="flex items-center justify-between gap-2">
@@ -724,11 +751,11 @@ export function TuiView() {
       <div className="min-h-0 flex-1">
         {previewOpen ? (
           <PanelGroup direction="horizontal" className="h-full">
-            <Panel defaultSize={33} minSize={15} className="min-w-0">
+            <Panel defaultSize={33} minSize={15} className="flex min-w-0 flex-col overflow-hidden">
               {list}
             </Panel>
             <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors rounded-none mx-0.5" />
-            <Panel defaultSize={67} minSize={30} className="min-w-0">
+            <Panel defaultSize={67} minSize={30} className="flex min-w-0 flex-col overflow-hidden">
               {preview}
             </Panel>
           </PanelGroup>

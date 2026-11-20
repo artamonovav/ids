@@ -386,13 +386,10 @@ export function EditorView() {
   const serialized = serializeDocument(fm, body)
   const isTmp = activeFile.fileName.startsWith(".tmp/") || !activeFile.number
 
-  // Карточка укладывается в окно: шапка/вкладки/панель форм — фиксированы,
-  // тело документа занимает остаток и скроллится внутри себя. Без этого
-  // страница скроллилась целиком и полосы прокрутки наезжали на шапку/футер.
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col gap-3 pb-2">
+    <div className="space-y-3 pb-2">
       {/* Шапка */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={closeEditor}>
             <ArrowLeft className="size-5" />
@@ -443,7 +440,7 @@ export function EditorView() {
 
       {/* Вкладки файлов в папке */}
       {folderFiles.length > 1 && (
-        <Tabs value={activeFile.id} onValueChange={(v) => openFile(v)} className="shrink-0">
+        <Tabs value={activeFile.id} onValueChange={(v) => openFile(v)}>
           <TabsList className="flex h-auto flex-wrap gap-1">
             {folderFiles.map((f) => (
               <TabsTrigger key={f.id} value={f.id} className="gap-1.5">
@@ -457,7 +454,7 @@ export function EditorView() {
       )}
 
       {/* Форма frontmatter (сворачиваемая) */}
-      <Card className="shrink-0">
+      <Card>
         <Collapsible open={fmOpen} onOpenChange={setFmOpen}>
           <CardHeader className="px-4 py-3">
             <CardTitle className="text-sm">Поля локализации (frontmatter)</CardTitle>
@@ -475,7 +472,7 @@ export function EditorView() {
             </CardAction>
           </CardHeader>
           <CollapsibleContent>
-            <CardContent className="max-h-[40vh] overflow-y-auto px-4 pb-4">
+            <CardContent className="px-4 pb-4">
               <FrontmatterForm
                 value={fm}
                 onChange={onFmChange}
@@ -492,11 +489,12 @@ export function EditorView() {
       </Card>
 
       {/* Редактор тела — занимает остаток высоты, скроллится внутри */}
-      <Card className="flex min-h-0 flex-1 flex-col">
-        <CardHeader className="px-4 py-3 shrink-0">
+      {/* overflow-hidden: скроллбары редактора не выходят за границы блока */}
+      <Card className="overflow-hidden">
+        <CardHeader className="px-4 py-3">
           <CardTitle className="text-sm">Тело документа (Markdown)</CardTitle>
         </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-4">
+        <CardContent className="px-4 pb-4">
           <MarkdownEditor
             key={`${activeFile.id}-${editable}`}
             value={body}
@@ -505,7 +503,6 @@ export function EditorView() {
             onAddAttachment={handleAddAttachment}
             initialMode={initialEditorMode}
             readOnly={!editable}
-            fillHeight
           />
         </CardContent>
       </Card>
@@ -545,7 +542,7 @@ export function EditorView() {
       </Collapsible>
 
       {/* Нижний набор кнопок — Сохранить и Удалить; синхронизация есть в футере */}
-      <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
         {renderActions(false)}
       </div>
 

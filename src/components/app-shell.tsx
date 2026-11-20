@@ -47,6 +47,10 @@ function ThemeMenu() {
   const tableView = useStore((s) => s.config.tableView)
   const setTuiMode = useStore((s) => s.setTuiMode)
   const setTableView = useStore((s) => s.setTableView)
+  const offline = useStore((s) => s.settings.offline)
+  const setOffline = useStore((s) => s.setOffline)
+  const fontScale = useStore((s) => s.config.fontScale)
+  const setFontScale = useStore((s) => s.setFontScale)
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
 
@@ -110,6 +114,29 @@ function ThemeMenu() {
         >
           Табличный список (GUI)
         </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Режим работы
+        </DropdownMenuLabel>
+        <DropdownMenuCheckboxItem
+          checked={offline}
+          onCheckedChange={(v) => setOffline(v)}
+        >
+          Автономный режим
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Масштаб текста
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={String(fontScale)}
+          onValueChange={(v) => setFontScale(parseInt(v, 10))}
+        >
+          <DropdownMenuRadioItem value="85">Мелкий (85%)</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="100">Обычный (100%)</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="115">Крупный (115%)</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="130">Очень крупный (130%)</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )
