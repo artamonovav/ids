@@ -169,7 +169,8 @@ export function AppShell() {
           блюр липкого элемента пересчитывается на каждый кадр прокрутки и
           вызывает сильные лаги (особенно на длинных страницах — настройки). */}
       <header className="sticky top-0 z-40 border-b bg-background">
-        <div className="mx-auto flex h-12 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
+        {/* Резиновая ширина: без max-w-7xl — и в GUI, и в TUI-режиме */}
+        <div className="flex h-12 w-full items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <img src="/logo.svg" alt="IDS" className="size-8" />
             <div className="leading-tight">
@@ -209,7 +210,7 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6">
+      <main className="w-full flex-1 px-4 py-4 sm:px-6">
         {view === "workspace" && (tuiMode ? <TuiView /> : <WorkspaceView />)}
         {view === "editor" && <EditorView />}
         {view === "settings" && <SettingsView />}
@@ -217,7 +218,7 @@ export function AppShell() {
       </main>
 
       <footer className="sticky bottom-0 z-40 border-t bg-background">
-        <div className="mx-auto flex h-10 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
+        <div className="flex h-10 w-full items-center justify-between gap-2 px-4 sm:px-6">
           <StatusPill />
           {version && (
             <span

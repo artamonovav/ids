@@ -719,10 +719,6 @@ html[data-tui] * {
 html[data-tui] .cm-scroller {
   font-family: var(--font-mono) !important;
 }
-/* Резиновая ширина: TUI не ограничен центральной колонкой */
-html[data-tui] main {
-  max-width: none;
-}
 
 /* Подсветка diff-блоков (```diff) в стиле VSCode/GitHub: зелёный — добавлено,
    красный — удалено, синий — заголовок hunk (@@). Переменные общие для Live
