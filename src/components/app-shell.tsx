@@ -165,7 +165,10 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <GitIdentityDialog />
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+      {/* Шапка без backdrop-blur: на Linux/WebKitGTK (программный рендеринг)
+          блюр липкого элемента пересчитывается на каждый кадр прокрутки и
+          вызывает сильные лаги (особенно на длинных страницах — настройки). */}
+      <header className="sticky top-0 z-40 border-b bg-background">
         <div className="mx-auto flex h-12 w-full max-w-7xl items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <img src="/logo.svg" alt="IDS" className="size-8" />
