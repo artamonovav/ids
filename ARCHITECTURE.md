@@ -58,6 +58,7 @@ graph TD
     subgraph "Views (switch by view state)"
         SETUP[SetupWizard<br/>первый запуск: папка→ветки→профиль]
         WORK[WorkspaceView / TuiView<br/>список локализаций: обычный или TUI]
+        VLIST[VirtualList<br/>общий виртуальный список GUI+TUI]
         EDITOR[EditorView<br/>форма + редактор + исходник]
         SETTINGS[SettingsView<br/>профиль, папка проекта, справочники, шаблон]
         LOGS[LogsView<br/>журнал: работа + git, выгрузка]
@@ -68,6 +69,8 @@ graph TD
     APP --> EDITOR
     APP --> SETTINGS
     APP --> LOGS
+    WORK --> VLIST
+    WORK --> VLIST
 
     subgraph "EditorView internals"
         FM[FrontmatterForm<br/>13 полей, теги, селекты]
