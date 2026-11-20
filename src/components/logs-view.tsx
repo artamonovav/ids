@@ -57,6 +57,10 @@ export function LogsView() {
     () => raw.split("\n").filter((l) => l.includes(`[${tab}]`)),
     [raw, tab]
   )
+  // Рендерим только хвост журнала: файл ограничен ~4 МБ, тысячи строк
+  // в <pre> тормозят WebKitGTK при отрисовке и листании.
+  const TAIL_LINES = 1000
+  const shown = lines.length > TAIL_LINES ? lines.slice(-TAIL_LINES) : lines
 
   // Свежие события внизу — автоскролл при обновлении.
   React.useEffect(() => {
@@ -140,7 +144,14 @@ export function LogsView() {
             className="h-full overflow-y-auto rounded-md p-3 font-mono text-[11px] leading-relaxed"
           >
             {lines.length > 0 ? (
-              lines.join("\n")
+              <>
+                {lines.length > TAIL_LINES && (
+                  <span className="text-muted-foreground">
+                    … показаны последние {TAIL_LINES} из {lines.length} строк (полный текст — в выгрузке)
+                  </span>
+                )}
+                {shown.join("\n")}
+              </>
             ) : (
               <span className="text-muted-foreground">
                 Записей нет. {TAB_TITLE[tab]} пополняется при работе приложения.

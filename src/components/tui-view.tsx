@@ -320,10 +320,46 @@ export function TuiView() {
     setSel(0)
   }, [tab, term, sortKey, sortDir, onlyUnsynced])
 
-  // Выбранная строка всегда в зоне видимости.
+  // Виртуализация списка: рендерятся только видимые строки (+запас).
+  // Высота строки фиксированная — позиция считается по scrollTop.
+  const ROW_H = 28 // h-7
+  const OVERSCAN = 10
+  const [scroll, setScroll] = React.useState({ top: 0, h: 400 })
+  const onListScroll = React.useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    setScroll((prev) =>
+      prev.top === el.scrollTop && prev.h === el.clientHeight
+        ? prev
+        : { top: el.scrollTop, h: el.clientHeight }
+    )
+  }, [])
+  // Пересчитать окно при смене контента/размера контейнера.
   React.useEffect(() => {
-    const el = listRef.current?.querySelector(`[data-idx="${sel}"]`)
-    el?.scrollIntoView({ block: "nearest" })
+    const el = listRef.current
+    if (!el) return
+    setScroll((prev) =>
+      prev.top === el.scrollTop && prev.h === el.clientHeight
+        ? prev
+        : { top: el.scrollTop, h: el.clientHeight }
+    )
+  }, [items.length, tab])
+  const winStart = Math.max(0, Math.floor(scroll.top / ROW_H) - OVERSCAN)
+  const winEnd = Math.min(
+    items.length,
+    Math.ceil((scroll.top + scroll.h) / ROW_H) + OVERSCAN
+  )
+
+  // Выбранная строка всегда в зоне видимости (прямая прокрутка — надёжнее
+  // scrollIntoView при виртуализации: строка может быть ещё не отрендерена).
+  React.useEffect(() => {
+    const el = listRef.current
+    if (!el || items.length === 0) return
+    const target = sel * ROW_H
+    if (target < el.scrollTop) {
+      el.scrollTop = target
+    } else if (target + ROW_H > el.scrollTop + el.clientHeight) {
+      el.scrollTop = target + ROW_H - el.clientHeight
+    }
   }, [sel, items.length])
 
   const totalKb = files.filter((f) => f.number).length
@@ -486,47 +522,54 @@ export function TuiView() {
   )
 
   const list = (
-    <div
-      ref={listRef}
-      className="h-full overflow-y-auto border border-border"
-      role="listbox"
-      aria-label="Список локализаций"
-    >
+    <div className="flex min-h-0 flex-1 flex-col border border-border">
       {columnHeader}
-      {items.length === 0 ? (
-        <p className="px-2 py-4 text-muted-foreground">
-          {term ? "Ничего не найдено. Esc — сбросить фильтр." : "Пусто. n — новый черновик."}
-        </p>
-      ) : (
-        items.map((item, i) => (
-          <div
-            key={item.id}
-            data-idx={i}
-            role="option"
-            aria-selected={i === sel}
-            tabIndex={0}
-            onClick={() => {
-              // Клик по любому полю (кроме номера) — выбор + предпросмотр.
-              setSel(i)
-              setPreviewOpen(true)
-            }}
-            onFocus={() => setSel(i)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                item.open()
-              }
-            }}
-            className={`flex cursor-pointer items-center gap-2 px-2 py-0.5 ${
-              i === sel
-                ? "bg-accent text-accent-foreground outline-none"
-                : "hover:bg-accent/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            }`}
-          >
-            {item.render()}
-          </div>
-        ))
-      )}
+      <div
+        ref={listRef}
+        onScroll={onListScroll}
+        className="min-h-0 flex-1 overflow-y-auto"
+        role="listbox"
+        aria-label="Список локализаций"
+      >
+        {items.length === 0 ? (
+          <p className="px-2 py-4 text-muted-foreground">
+            {term ? "Ничего не найдено. Esc — сбросить фильтр." : "Пусто. n — новый черновик."}
+          </p>
+        ) : (
+          <>
+            <div style={{ height: winStart * ROW_H }} aria-hidden />
+            {items.slice(winStart, winEnd).map((item, i) => (
+              <div
+                key={item.id}
+                data-idx={winStart + i}
+                role="option"
+                aria-selected={winStart + i === sel}
+                tabIndex={0}
+                onClick={() => {
+                  // Клик по любому полю (кроме номера) — выбор + предпросмотр.
+                  setSel(winStart + i)
+                  setPreviewOpen(true)
+                }}
+                onFocus={() => setSel(winStart + i)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    item.open()
+                  }
+                }}
+                className={`flex h-7 cursor-pointer items-center gap-2 px-2 ${
+                  winStart + i === sel
+                    ? "bg-accent text-accent-foreground outline-none"
+                    : "hover:bg-accent/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                }`}
+              >
+                {item.render()}
+              </div>
+            ))}
+            <div style={{ height: (items.length - winEnd) * ROW_H }} aria-hidden />
+          </>
+        )}
+      </div>
     </div>
   )
 
