@@ -47,6 +47,8 @@ const TYPE_BADGE: Record<string, "destructive" | "secondary" | "outline"> = {
 
 type Mode = "drafts" | "all"
 
+const PAGE = 10 // карточек на страницу (режим карточек)
+
 /** Колонки таблицы, доступные для сортировки. */
 type SortKey =
   | "number"
@@ -130,6 +132,8 @@ export function WorkspaceView() {
   // (от больших SPAS к меньшим).
   const [sortKey, setSortKey] = React.useState<SortKey>("number")
   const [sortDir, setSortDir] = React.useState<1 | -1>(-1)
+  // Пагинация карточек: в таблице скролл без пагинации.
+  const [page, setPage] = React.useState(1)
 
   const folders = React.useMemo(() => selectFolders(files), [files])
   const tempDrafts = React.useMemo(
@@ -165,6 +169,10 @@ export function WorkspaceView() {
       }),
     [baseFolders, term, type]
   )
+
+  React.useEffect(() => {
+    setPage(1)
+  }, [mode, q, type])
 
   // Сортировка таблицы по выбранной колонке (применяется к отфильтрованным).
   const sortedFolders = React.useMemo(() => {
@@ -239,7 +247,14 @@ export function WorkspaceView() {
 
   const showTemps = mode === "drafts"
   // «Все» — полный список; скролл внутри таблицы (как в TUI), без пагинации.
-  const visibleFolders = mode === "drafts" ? [] : sortedFolders
+  const pages = Math.max(1, Math.ceil(sortedFolders.length / PAGE))
+  const safePage = Math.min(page, pages)
+  const visibleFolders =
+    mode === "drafts"
+      ? []
+      : tableView
+        ? sortedFolders
+        : sortedFolders.slice((safePage - 1) * PAGE, safePage * PAGE)
   const hasAny =
     visibleFolders.length > 0 || (showTemps && filteredTemps.length > 0)
 
@@ -735,6 +750,31 @@ export function WorkspaceView() {
               })}
             </div>
           ))}
+
+          {/* Пагинация — только для карточек; в таблице скролл без страниц */}
+          {mode === "all" && !tableView && (
+            <div className="flex items-center justify-center gap-3 py-1">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage <= 1}
+                onClick={() => setPage(safePage - 1)}
+              >
+                ‹ Назад
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Стр. {safePage} из {pages} ({sortedFolders.length})
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage >= pages}
+                onClick={() => setPage(safePage + 1)}
+              >
+                Вперёд ›
+              </Button>
+            </div>
+          )}
 
         </>
       )}

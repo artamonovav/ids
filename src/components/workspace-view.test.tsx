@@ -44,10 +44,21 @@ describe("WorkspaceView: табличный режим", () => {
     expect(screen.queryByTitle("Файлов в папке")).toBeNull()
   })
 
-  it("пагинации нет — весь список в таблице", () => {
+  it("в таблице пагинации нет — весь список в скролле", () => {
     render(<WorkspaceView />)
     expect(screen.queryByText(/Стр\. /)).toBeNull()
     expect(screen.queryByText("Вперёд")).toBeNull()
+  })
+
+  it("в карточках пагинация есть", () => {
+    useStore.setState({
+      config: { ...useStore.getState().config, tableView: false },
+    })
+    render(<WorkspaceView />)
+    expect(
+      screen.getByText((_, el) => el?.textContent === "Стр. 1 из 1 (3)")
+    ).toBeTruthy()
+    expect(screen.getByText(/Вперёд/)).toBeTruthy()
   })
 
   it("клик по полю номера открывает локализацию (view = editor)", async () => {
