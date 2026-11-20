@@ -378,29 +378,22 @@ export function TuiView() {
   // Высота строки фиксированная — позиция считается по scrollTop.
   const ROW_H = 28 // h-7
   const OVERSCAN = 10
-  const [scroll, setScroll] = React.useState({ top: 0, h: 400 })
-  const onListScroll = React.useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget
-    setScroll((prev) =>
-      prev.top === el.scrollTop && prev.h === el.clientHeight
-        ? prev
-        : { top: el.scrollTop, h: el.clientHeight }
-    )
-  }, [])
-  // Пересчитать окно при смене контента/размера контейнера.
+  // Позиция скролла читается ПРЯМО из DOM во время рендера (onScroll лишь
+  // дёргает перерисовку) — окно виртуализации всегда точное.
+  const [, bumpListScroll] = React.useReducer((x: number) => x + 1, 0)
+  const onListScroll = React.useCallback(() => bumpListScroll(), [])
   React.useEffect(() => {
-    const el = listRef.current
-    if (!el) return
-    setScroll((prev) =>
-      prev.top === el.scrollTop && prev.h === el.clientHeight
-        ? prev
-        : { top: el.scrollTop, h: el.clientHeight }
-    )
-  }, [items.length, tab])
-  const winStart = Math.max(0, Math.floor(scroll.top / ROW_H) - OVERSCAN)
+    const onResize = () => bumpListScroll()
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+  const listEl = listRef.current
+  const scrollTop = listEl ? listEl.scrollTop : 0
+  const viewH = listEl ? listEl.clientHeight : 400
+  const winStart = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN)
   const winEnd = Math.min(
     items.length,
-    Math.ceil((scroll.top + scroll.h) / ROW_H) + OVERSCAN
+    Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN
   )
 
   // Выбранная строка всегда в зоне видимости (прямая прокрутка — надёжнее
@@ -757,8 +750,10 @@ export function TuiView() {
                     setSearchMode(false)
                     setQ("")
                   } else if (e.key === "Enter") {
+                    // Фильтр применяется живо по мере ввода; Enter фиксирует
+                    // его и возвращает фокус списку — карточку не открываем.
                     e.preventDefault()
-                    openSelected()
+                    setSearchMode(false)
                   }
                 }}
                 placeholder="фильтр… (Esc — выход)"
