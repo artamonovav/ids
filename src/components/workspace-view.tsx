@@ -264,29 +264,15 @@ export function WorkspaceView() {
   // скроллится внутри своей области на весь отфильтрованный список.
   const fixedLayout = tableView && mode !== "drafts"
 
-  // Виртуализация таблицы: рендерятся только видимые строки (+запас),
-  // позиция по scrollTop; высота строки измеряется по факту (borders/padding).
-  const ROW_H_DEFAULT = 34
+  // Виртуализация таблицы: рендерятся только видимые строки (+запас).
+  // Высота строки фиксированная (h-8), позиция скролла читается ПРЯМО из DOM
+  // во время рендера (onScroll/ресайз лишь дёргают перерисовку) — в этом
+  // WebKitGTK обновление через setState отставало и строки пропадали.
+  const ROW_H = 32 // h-8
   const OVERSCAN = 10
   const scrollRef = React.useRef<HTMLDivElement | null>(null)
-  const [rowH, setRowH] = React.useState(ROW_H_DEFAULT)
-  // Позиция скролла читается ПРЯМО из DOM во время рендера (onScroll лишь
-  // дёргает перерисовку): состояние через setState в этом WebKitGTK отстаёт —
-  // окно виртуализации "залипало" и строки пропадали при листании.
   const [, bumpTableScroll] = React.useReducer((x: number) => x + 1, 0)
   const onTableScroll = React.useCallback(() => bumpTableScroll(), [])
-  // Измерить высоту первой строки данных (зависит от плотности/шрифта).
-  React.useLayoutEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    // высота строки — по первому СТРОКОВОМУ tr (не спейсеру)
-    const tr = el.querySelector<HTMLElement>("tbody tr:not([aria-hidden])")
-    if (tr) {
-      const h = Math.round(tr.getBoundingClientRect().height)
-      if (h > 0) setRowH(h)
-    }
-  }, [visibleFolders.length, showPreview])
-  // Ресайз окна — перерисовать (окно виртуализации пересчитается при рендере)
   React.useEffect(() => {
     const onResize = () => bumpTableScroll()
     window.addEventListener("resize", onResize)
@@ -295,13 +281,13 @@ export function WorkspaceView() {
   const scrollEl = scrollRef.current
   const scrollTop = scrollEl ? scrollEl.scrollTop : 0
   const viewH = scrollEl ? scrollEl.clientHeight : 600
-  const winStart = Math.max(0, Math.floor(scrollTop / rowH) - OVERSCAN)
+  const winStart = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN)
   const winEnd = Math.min(
     visibleFolders.length,
-    Math.ceil((scrollTop + viewH) / rowH) + OVERSCAN
+    Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN
   )
-  const topPad = winStart * rowH
-  const bottomPad = Math.max(0, visibleFolders.length - winEnd) * rowH
+  const topPad = winStart * ROW_H
+  const bottomPad = Math.max(0, visibleFolders.length - winEnd) * ROW_H
 
   const activeFolder = React.useMemo(
     () =>
@@ -361,97 +347,110 @@ export function WorkspaceView() {
     })
   }
 
-  /** Таблица локализаций (табличный режим). */
+  /** Таблица локализаций (табличный режим). Структура — как у списка TUI
+   *  (flex-шапка + absolute-скролл, строки фиксированной высоты): на этом
+   *  WebKitGTK вложенные flex-высоты и виртуализация <table> ненадёжны. */
   const tableEl = (
-    <div>
-      <table className="w-full text-sm">
-<thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
-                    {(
-                      [
-                        ["number", "Номер", "px-3 py-2"],
-                        ["type", "Тип", "px-2 py-2"],
-                        ["environment", "Окр.", "px-2 py-2"],
-                        ["product", "Продукты", "px-2 py-2"],
-                        ["symptom", "Симптом", "px-2 py-2"],
-                        ["author", "Автор", "hidden px-2 py-2 lg:table-cell"],
-                        ["updatedAt", "Обновлено", "px-2 py-2 text-right min-w-[10rem]"],
-                      ] as const
-                    ).map(([key, label, cls]) => (
-                      <th
-                        key={key}
-                        scope="col"
-                        className={`sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap border-b bg-muted font-medium hover:bg-muted hover:text-foreground ${cls}`}
-                        onClick={() => toggleSort(key)}
-                        title="Сортировать"
-                      >
-                        {label}
-                        {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {topPad > 0 && (
-                    <tr aria-hidden>
-                      <td colSpan={8} style={{ height: topPad }} />
-                    </tr>
-                  )}
-                  {visibleFolders.slice(winStart, winEnd).map((f) => {
-                    const fm = f.main.frontmatter
-                    const dirty = f.files.some((x) => x.dirty)
-                    return (
-                      <tr
-                        key={f.number}
-                        className={`cursor-pointer border-b transition-colors last:border-0 hover:bg-accent/50 ${
-                          activeNumber === f.number ? "bg-accent/40" : ""
-                        }`}
-                        onClick={() => {
-                          // Клик по строке — выбор + предпросмотр; номер — открыть.
-                          setActiveNumber(f.number)
-                          setPreviewOpen(true)
-                        }}
-                        onDoubleClick={() => openFolder(f.number)}
-                      >
-                        <td
-                          className="whitespace-nowrap px-3 py-1.5 font-mono font-semibold hover:underline"
-                          title={`Открыть ${f.number}`}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openFolder(f.number)
-                          }}
-                        >
-                          {f.number}
-                          {dirty && (
-                            <span
-                              className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
-                              title="Несинхронизировано"
-                            />
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5">{fm.type}</td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-muted-foreground">{fm.environment}</td>
-                        <td className="max-w-40 truncate px-2 py-1.5 font-mono text-xs text-muted-foreground" title={fm.product.join(", ")}>
-                          {fm.product.join(", ")}
-                        </td>
-                        <td className="max-w-md truncate px-2 py-1.5">{fm.symptom || "— без описания симптома —"}</td>
-                        <td className="hidden max-w-44 truncate px-2 py-1.5 text-xs text-muted-foreground lg:table-cell">
-                          {fm.author || "— без автора —"}
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs text-muted-foreground min-w-[10rem]">
-                          {fmtDate(f.updatedAt)}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {bottomPad > 0 && (
-                    <tr aria-hidden>
-                      <td colSpan={8} style={{ height: bottomPad }} />
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+    <div className="flex h-full min-h-0 flex-col">
+      <div
+        className="flex h-7 shrink-0 items-center gap-2 border-b bg-muted px-3 text-xs text-muted-foreground"
+        data-testid="table-head"
+      >
+        {(
+          [
+            ["number", "Номер", "w-24 lg:w-32 shrink-0"],
+            ["type", "Тип", "w-16 sm:w-24 shrink-0"],
+            ["environment", "Окр.", "w-12 md:w-20 shrink-0"],
+            ["product", "Продукты", "hidden w-28 lg:w-40 shrink-0 lg:block"],
+            ["symptom", "Симптом", "flex-1 min-w-0"],
+            ["author", "Автор", "hidden w-36 shrink-0 lg:block"],
+            ["updatedAt", "Обновлено", "hidden w-32 shrink-0 text-right sm:block"],
+          ] as const
+        ).map(([key, label, cls]) => (
+          <button
+            key={key}
+            type="button"
+            role="columnheader"
+            onClick={() => toggleSort(key)}
+            title="Сортировать"
+            className={`shrink-0 text-left hover:text-foreground ${cls} ${key === "symptom" ? "flex-1" : ""}`}
+          >
+            {label}
+            {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
+          </button>
+        ))}
+      </div>
+      <div
+        ref={scrollRef}
+        onScroll={onTableScroll}
+        className="min-h-0 flex-1 overflow-auto"
+      >
+        {topPad > 0 && <div style={{ height: topPad }} aria-hidden />}
+        {visibleFolders.slice(winStart, winEnd).map((f, i) => {
+          const fm = f.main.frontmatter
+          const dirty = f.files.some((x) => x.dirty)
+          const idx = winStart + i
+          return (
+            <div
+              key={f.number}
+              data-idx={idx}
+              onClick={() => {
+                // Клик по строке — выбор + предпросмотр; номер — открыть.
+                setActiveNumber(f.number)
+                setPreviewOpen(true)
+              }}
+              onDoubleClick={() => openFolder(f.number)}
+              className={`flex h-8 cursor-pointer items-center gap-2 px-3 text-sm ${
+                activeNumber === f.number ? "bg-accent/40" : "hover:bg-accent/50"
+              }`}
+            >
+              <span
+                className="w-24 lg:w-32 shrink-0 cursor-pointer truncate font-mono font-semibold hover:underline"
+                title={`Открыть ${f.number}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openFolder(f.number)
+                }}
+              >
+                {f.number}
+                {dirty && (
+                  <span
+                    className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
+                    title="Несинхронизировано"
+                  />
+                )}
+              </span>
+              <span className="w-16 sm:w-24 shrink-0 truncate">{fm.type}</span>
+              <span className="w-12 md:w-20 shrink-0 truncate text-muted-foreground">
+                {fm.environment}
+              </span>
+              <span
+                className="hidden w-28 lg:w-40 shrink-0 truncate font-mono text-xs text-muted-foreground lg:block"
+                title={fm.product.join(", ")}
+              >
+                {fm.product.join(", ") || "—"}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                {fm.symptom || "— без описания симптома —"}
+              </span>
+              <span
+                className="hidden w-36 shrink-0 truncate text-xs text-muted-foreground lg:block"
+                title={fm.author}
+              >
+                {fm.author || "— без автора —"}
+              </span>
+              <span
+                className="hidden w-32 shrink-0 text-right text-xs text-muted-foreground sm:block"
+                title={`Обновлено ${fmtDate(f.updatedAt)}`}
+              >
+                {fmtDate(f.updatedAt)}
+              </span>
             </div>
+          )
+        })}
+        {bottomPad > 0 && <div style={{ height: bottomPad }} aria-hidden />}
+      </div>
+    </div>
   )
 
   /** Шторка предпросмотра активной записи (табличный режим). */

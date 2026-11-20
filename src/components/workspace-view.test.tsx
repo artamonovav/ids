@@ -32,8 +32,8 @@ describe("WorkspaceView: табличный режим", () => {
 
   it("строки рендерятся, у строки столько ячеек, сколько колонок", () => {
     const { container } = render(<WorkspaceView />)
-    const firstRow = container.querySelector("tbody tr")!
-    expect(firstRow.querySelectorAll("td").length).toBe(
+    const firstRow = container.querySelector('[data-idx="0"]')!
+    expect(firstRow.children.length).toBe(
       screen.getAllByRole("columnheader").length
     )
     expect(screen.getByText("SPAS-0003")).toBeTruthy()
@@ -70,8 +70,8 @@ describe("WorkspaceView: табличный режим", () => {
 
   it("клик по другому полю — шторка предпросмотра с телом записи", () => {
     const { container } = render(<WorkspaceView />)
-    const firstRow = container.querySelector("tbody tr")!
-    fireEvent.click(firstRow.querySelectorAll("td")[1]!) // Тип
+    const firstRow = container.querySelector('[data-idx="0"]')!
+    fireEvent.click(firstRow.children[1]!) // Тип
     expect(screen.getByText(/Шаги воспроизведения/)).toBeTruthy()
   })
 
