@@ -1,6 +1,6 @@
 name: CI
 
-# Проверка фронтенда на push/PR: типы (tsc --noEmit) + сборка (vite build)
+# Проверка фронтенда на push/PR: типы (tsc), тесты (vitest), сборка (vite build)
 # на чистом окружении с frozen-lockfile — ловит незакоммиченные зависимости
 # и битые импорты до релиза. Rust не нужен — полная сборка бинарников
 # выполняется в release.yml по тегам v*.
@@ -22,4 +22,5 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bunx tsc --noEmit
+      - run: bun run test
       - run: bun run build

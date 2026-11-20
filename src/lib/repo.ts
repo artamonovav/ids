@@ -82,8 +82,9 @@ export function serializeConfig(c: UserConfig): string {
   L.push(`  email: ${cfgVal(c.profile.email)}`)
   if (c.profile.spaceCode) L.push(`  spaceCode: ${cfgVal(c.profile.spaceCode)}`)
   L.push(`recentLimit: ${c.recentLimit}`)
-  if (c.tuiMode) L.push("tuiMode: true")
-  if (c.tableView) L.push("tableView: true")
+  // tableView пишем всегда: false должна сохраняться явно (дефолт — true)
+  L.push(`tuiMode: ${c.tuiMode}`)
+  L.push(`tableView: ${c.tableView}`)
   if (c.fontScale !== 100) L.push(`fontScale: ${c.fontScale}`)
   return L.join("\n") + "\n"
 }

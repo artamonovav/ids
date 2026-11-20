@@ -280,6 +280,8 @@ interface State {
   gitIdentityMissing: boolean
   /** Доступна новая версия (GitHub Releases); null — актуальная/не проверяли. */
   update: UpdateInfo | null
+  /** Верхнеуровневые папки с изменениями по git (могут быть изменены не в IDS). */
+  unsyncedExternal: string[]
 
   init: () => Promise<void>
   /** Проверить обновления (GitHub Releases). silent=true — автопроверка
@@ -332,6 +334,7 @@ export const useStore = create<State>()((set, get) => ({
   config: DEFAULT_USER_CONFIG,
   gitIdentityMissing: false,
   update: null,
+  unsyncedExternal: [],
 
   init: async () => {
     try {
@@ -430,13 +433,14 @@ export const useStore = create<State>()((set, get) => ({
     const { base, settings } = get()
     if (!base || settings.offline) return
     try {
-      const st = await invoke<{ uncommitted: number; unpushed: number }>(
-        "git_sync_state",
-        { folder: base },
-      )
+      const st = await invoke<{
+        uncommitted: number
+        unpushed: number
+        changedDirs: string[]
+      }>("git_sync_state", { folder: base })
       if (get().syncStatus === "red") return
       const needs = st.uncommitted > 0 || st.unpushed > 0
-      set({ syncStatus: needs ? "yellow" : "green" })
+      set({ syncStatus: needs ? "yellow" : "green", unsyncedExternal: st.changedDirs ?? [] })
     } catch { /* git недоступен — статус не трогаем */ }
   },
 

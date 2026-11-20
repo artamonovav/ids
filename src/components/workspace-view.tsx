@@ -245,6 +245,9 @@ export function WorkspaceView() {
 
   // Шторка предпросмотра — только в табличном режиме и не на «Черновиках».
   const showPreview = tableView && previewOpen && mode !== "drafts"
+  // Табличный режим (вне черновиков) — flex-колонка под окно: таблица
+  // скроллится внутри своей области на весь отфильтрованный список.
+  const fixedLayout = tableView && mode !== "drafts"
 
   const activeFolder = React.useMemo(
     () =>
@@ -409,10 +412,17 @@ export function WorkspaceView() {
             )}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            {activeActual.frontmatter.author || "— без автора —"} · обновлено {fmtDate(activeActual.updatedAt)}
+            {activeActual.frontmatter.author || "— без автора —"} · обновлено{" "}
+            {fmtDate(activeActual.updatedAt)}
           </p>
         </div>
-        <Button variant="ghost" size="icon" className="size-6 shrink-0" onClick={() => setPreviewOpen(false)} aria-label="Закрыть предпросмотр">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 shrink-0"
+          onClick={() => setPreviewOpen(false)}
+          aria-label="Закрыть предпросмотр"
+        >
           <X className="size-4" />
         </Button>
       </div>
@@ -430,8 +440,8 @@ export function WorkspaceView() {
   // панели занимают остаток, элементы управления и пагинация всегда видны
   // (страница не скроллится). Без шторки — обычный поток.
   return (
-    <div className={showPreview ? "flex h-[calc(100vh-7.5rem)] flex-col gap-3" : "space-y-4"}>
-      <div className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${showPreview ? "shrink-0" : ""}`}>
+    <div className={fixedLayout ? "flex h-[calc(100vh-7.5rem)] flex-col gap-3" : "space-y-4"}>
+      <div className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${fixedLayout ? "shrink-0" : ""}`}>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Локализации проблем</h1>
           <p className="text-xs text-muted-foreground">
@@ -452,7 +462,7 @@ export function WorkspaceView() {
         </div>
       </div>
 
-      <div className={`flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between ${showPreview ? "shrink-0" : ""}`}>
+      <div className={`flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between ${fixedLayout ? "shrink-0" : ""}`}>
         <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
           <TabsList className="h-8">
             <TabsTrigger value="all" className="text-xs">Все</TabsTrigger>
@@ -603,7 +613,7 @@ export function WorkspaceView() {
                 </PanelGroup>
               </div>
             ) : (
-              <div className="relative min-h-0 flex-1 rounded-md border">
+              <div className="relative min-h-0 flex-1 rounded-md border overflow-hidden">
                 <div className="absolute inset-0 overflow-y-auto">{tableEl}</div>
               </div>
             )

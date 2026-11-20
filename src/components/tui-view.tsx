@@ -97,6 +97,7 @@ export function TuiView() {
   const openFile = useStore((s) => s.openFile)
   const removeFile = useStore((s) => s.removeFile)
   const setView = useStore((s) => s.setView)
+  const unsyncedExternal = useStore((s) => s.unsyncedExternal)
   const { toast } = useToast()
 
   const [tab, setTab] = React.useState<Tab>("kb")
@@ -236,9 +237,15 @@ export function TuiView() {
     setSel(0)
   }
 
+  // «Не синхронизировано» = изменено в IDS (dirty) ИЛИ на диске по git
+  // (untracked/изменённые вне приложения).
   const unsyncedKbCount = React.useMemo(
-    () => folders.filter((f) => f.files.some((x) => x.dirty)).length,
-    [folders]
+    () =>
+      folders.filter(
+        (f) =>
+          f.files.some((x) => x.dirty) || unsyncedExternal.includes(f.number)
+      ).length,
+    [folders, unsyncedExternal]
   )
 
   interface Row {
@@ -250,7 +257,12 @@ export function TuiView() {
   const items: Row[] = React.useMemo(() => {
     if (tab === "kb") {
       return folders
-        .filter((f) => !onlyUnsynced || f.files.some((x) => x.dirty))
+        .filter(
+          (f) =>
+            !onlyUnsynced ||
+            f.files.some((x) => x.dirty) ||
+            unsyncedExternal.includes(f.number)
+        )
         .filter((f) => !term || rowText(f.main).includes(term))
         .sort(cmpFolder)
         .map((f) => {
@@ -354,7 +366,7 @@ export function TuiView() {
         ),
         }
       })
-  }, [tab, folders, drafts, term, openFolder, openFile, cmp, cmpFolder, onlyUnsynced])
+  }, [tab, folders, drafts, term, openFolder, openFile, cmp, cmpFolder, onlyUnsynced, unsyncedExternal])
 
   // Фильтр/вкладка/сортировка изменились → курсор в начало (сортировка
   // тоже сбрасывает: строки меняются местами).
@@ -410,6 +422,10 @@ export function TuiView() {
   const productCount = (products?.match(/^\s+-/gm) || []).length
   const status = syncing ? { text: "СИНХРОНИЗАЦИЯ…", cls: "text-amber-600 dark:text-amber-400" } : STATUS_MAP[syncStatus]
 
+  // Обновить статус/список несинхронизированных при входе в TUI.
+  React.useEffect(() => {
+    void useStore.getState().refreshSyncState()
+  }, [])
   // Активная запись для шторки предпросмотра.
   const activeItem = items[sel] ?? null
   const activeFile = activeItem ? activeItem.file : null
@@ -715,7 +731,7 @@ export function TuiView() {
           <button
             type="button"
             onClick={() => setOnlyUnsynced((p) => !p)}
-            title="Показать только не синхронизированные (u)"
+            title="Показать записи с несинхронизированными изменениями — в IDS или на диске (u)"
             className={`px-2 ${
               onlyUnsynced
                 ? "bg-amber-500/20 font-bold text-amber-600 dark:text-amber-400"

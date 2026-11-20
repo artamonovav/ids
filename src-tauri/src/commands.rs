@@ -168,6 +168,9 @@ pub struct SyncState {
     pub uncommitted: usize,
     /// Коммитов локально, которых нет в upstream.
     pub unpushed: usize,
+    /// Верхнеуровневые папки/файлы с изменениями по git (для списка
+    /// «не синхронизировано»: изменено в IDS ИЛИ на диске).
+    pub changed_dirs: Vec<String>,
 }
 
 /// Реальное состояние синхронизации из git (не из флажка dirty):
@@ -177,17 +180,35 @@ pub struct SyncState {
 pub async fn git_sync_state(folder: String) -> Result<SyncState, String> {
     blocking(move || {
         if !Path::new(&folder).join(".git").exists() {
-            return Ok(SyncState { uncommitted: 0, unpushed: 0 });
+            return Ok(SyncState { uncommitted: 0, unpushed: 0, changed_dirs: Vec::new() });
         }
         let mut uncommitted = 0usize;
+        let mut changed_dirs: Vec<String> = Vec::new();
         let out = run_git(&[
             "-C", &folder, "status", "--porcelain", "--", ".", ":(exclude).tmp",
         ])?;
         if out.status.success() {
-            uncommitted = String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .count();
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            for line in stdout.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                uncommitted += 1;
+                // формат: XY <path> либо XY <old> -> <new>; верхний сегмент пути —
+                // папка локализации (untracked-каталоги porcelain показывает целиком: "dir/")
+                if line.len() < 4 {
+                    continue;
+                }
+                let mut path = line[3..].trim().trim_matches('"').to_string();
+                if let Some(i) = path.find(" -> ") {
+                    path = path[i + 4..].to_string();
+                }
+                let top = path.split('/').next().unwrap_or("").to_string();
+                if !top.is_empty() && !changed_dirs.contains(&top) {
+                    changed_dirs.push(top);
+                }
+            }
+            changed_dirs.sort();
         }
         let mut unpushed = 0usize;
         if let Ok(up) = run_git(&["-C", &folder, "rev-list", "--count", "@{upstream}..HEAD"]) {
@@ -198,7 +219,7 @@ pub async fn git_sync_state(folder: String) -> Result<SyncState, String> {
                     .unwrap_or(0);
             }
         }
-        Ok(SyncState { uncommitted, unpushed })
+        Ok(SyncState { uncommitted, unpushed, changed_dirs })
     })
     .await
 }
