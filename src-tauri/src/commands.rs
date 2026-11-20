@@ -325,6 +325,14 @@ pub fn write_file(base: String, path: String, content: String) -> Result<(), Str
     if let Some(parent) = p.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    // Идентичная перезапись — no-op: не меняет mtime, не делает репозиторий
+    // «грязным» без реальных изменений и не засоряет журнал (настройки
+    // сохраняют шаблон/конфиг целиком при каждом «Сохранить»).
+    if let Ok(existing) = fs::read(&p) {
+        if existing == content.as_bytes() {
+            return Ok(());
+        }
+    }
     fs::write(p, content).map_err(|e| e.to_string())?;
     logging::log("app", &format!("записан файл {path}"));
     Ok(())

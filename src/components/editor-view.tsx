@@ -313,8 +313,10 @@ export function EditorView() {
   }
 
   /** Одинаковый набор кнопок сверху и снизу: Сохранить, Синхронизировать, Удалить.
-   *  Удалить — только у черновика (в .tmp, никогда не синхронизируется). */
-  function renderActions() {
+   *  Удалить — только у черновика (в .tmp, никогда не синхронизируется).
+   *  sync=false — вариант для нижнего ряда: синхронизация дублируется
+   *  кнопкой в футере приложения. */
+  function renderActions(sync = true) {
     return (
       <>
         {editable && (
@@ -324,10 +326,12 @@ export function EditorView() {
             <span className="ml-1 hidden text-xs opacity-70 sm:inline">Ctrl+S</span>
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
-          <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
-          Синхронизировать
-        </Button>
+        {sync && (
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}>
+            <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
+            Синхронизировать
+          </Button>
+        )}
         {canDelete && (
           <Button
             variant="outline"
@@ -382,10 +386,13 @@ export function EditorView() {
   const serialized = serializeDocument(fm, body)
   const isTmp = activeFile.fileName.startsWith(".tmp/") || !activeFile.number
 
+  // Карточка укладывается в окно: шапка/вкладки/панель форм — фиксированы,
+  // тело документа занимает остаток и скроллится внутри себя. Без этого
+  // страница скроллилась целиком и полосы прокрутки наезжали на шапку/футер.
   return (
-    <div className="space-y-3 pb-2">
+    <div className="flex h-[calc(100vh-8rem)] flex-col gap-3 pb-2">
       {/* Шапка */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={closeEditor}>
             <ArrowLeft className="size-5" />
@@ -436,7 +443,7 @@ export function EditorView() {
 
       {/* Вкладки файлов в папке */}
       {folderFiles.length > 1 && (
-        <Tabs value={activeFile.id} onValueChange={(v) => openFile(v)}>
+        <Tabs value={activeFile.id} onValueChange={(v) => openFile(v)} className="shrink-0">
           <TabsList className="flex h-auto flex-wrap gap-1">
             {folderFiles.map((f) => (
               <TabsTrigger key={f.id} value={f.id} className="gap-1.5">
@@ -450,7 +457,7 @@ export function EditorView() {
       )}
 
       {/* Форма frontmatter (сворачиваемая) */}
-      <Card>
+      <Card className="shrink-0">
         <Collapsible open={fmOpen} onOpenChange={setFmOpen}>
           <CardHeader className="px-4 py-3">
             <CardTitle className="text-sm">Поля локализации (frontmatter)</CardTitle>
@@ -468,7 +475,7 @@ export function EditorView() {
             </CardAction>
           </CardHeader>
           <CollapsibleContent>
-            <CardContent className="px-4 pb-4">
+            <CardContent className="max-h-[40vh] overflow-y-auto px-4 pb-4">
               <FrontmatterForm
                 value={fm}
                 onChange={onFmChange}
@@ -484,12 +491,12 @@ export function EditorView() {
         </Collapsible>
       </Card>
 
-      {/* Редактор тела */}
-      <Card>
-        <CardHeader className="px-4 py-3">
+      {/* Редактор тела — занимает остаток высоты, скроллится внутри */}
+      <Card className="flex min-h-0 flex-1 flex-col">
+        <CardHeader className="px-4 py-3 shrink-0">
           <CardTitle className="text-sm">Тело документа (Markdown)</CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-4">
+        <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-4">
           <MarkdownEditor
             key={`${activeFile.id}-${editable}`}
             value={body}
@@ -498,6 +505,7 @@ export function EditorView() {
             onAddAttachment={handleAddAttachment}
             initialMode={initialEditorMode}
             readOnly={!editable}
+            fillHeight
           />
         </CardContent>
       </Card>
@@ -536,9 +544,9 @@ export function EditorView() {
         </Card>
       </Collapsible>
 
-      {/* Нижний набор кнопок — дублирует верхний: Сохранить, Синхронизировать, Удалить */}
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
-        {renderActions()}
+      {/* Нижний набор кнопок — Сохранить и Удалить; синхронизация есть в футере */}
+      <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+        {renderActions(false)}
       </div>
 
       {/* Диалог удаления черновика */}

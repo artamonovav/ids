@@ -219,6 +219,8 @@ export function SettingsView() {
     try {
       await writeConfig({ ...config, profile })
       await writeTemplateFile(tplContent)
+      // Запись шаблона могла изменить репозиторий — статус сразу по git.
+      void useStore.getState().refreshSyncState()
       toast({ title: "Настройки сохранены" })
     } catch (e) {
       toast({ title: "Не удалось сохранить", description: String(e), variant: "destructive" })
@@ -378,42 +380,14 @@ export function SettingsView() {
           />
         </Section>
 
-        {/* Режим работы: автономный режим + вид (TUI, таблица, масштаб) */}
-        <Section title="Режим работы" desc="Автономный режим и оформление приложения.">
+        {/* Режим работы: автономный режим + масштаб текста */}
+        <Section title="Режим работы" desc="Автономный режим и масштаб интерфейса.">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Автономный режим</p>
               <p className="text-[11px] text-muted-foreground">Сохранение локально с отложенной отправкой.</p>
             </div>
             <Switch checked={settings.offline} onCheckedChange={(v) => setOffline(v)} />
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">TUI-режим</p>
-              <p className="text-[11px] text-muted-foreground">
-                Терминальный вид всего приложения: моноширинный шрифт, без
-                скруглений, резиновая ширина. Рабочая область — клавиатурный
-                список (j/k · Enter · n · s · d · v · /).
-              </p>
-            </div>
-            <Switch checked={config.tuiMode} onCheckedChange={(v) => setTuiMode(v)} />
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Табличный список</p>
-              <p className="text-[11px] text-muted-foreground">
-                В графическом режиме: плотная таблица вместо карточек
-                (номер, тип, окружение, продукты, симптом, автор, обновлено).
-                {config.tuiMode && " Недоступно при включённом TUI-режиме."}
-              </p>
-            </div>
-            <Switch
-              checked={config.tuiMode ? false : config.tableView}
-              disabled={config.tuiMode}
-              onCheckedChange={(v) => setTableView(v)}
-            />
           </div>
           <Separator />
           <div className="flex items-center justify-between gap-3">

@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -42,6 +43,10 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 function ThemeMenu() {
   const { theme, resolvedTheme, setTheme } = useTheme()
   const { palette, setPalette } = usePalette()
+  const tuiMode = useStore((s) => s.config.tuiMode)
+  const tableView = useStore((s) => s.config.tableView)
+  const setTuiMode = useStore((s) => s.setTuiMode)
+  const setTableView = useStore((s) => s.setTableView)
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
 
@@ -88,6 +93,23 @@ function ThemeMenu() {
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Просмотр
+        </DropdownMenuLabel>
+        <DropdownMenuCheckboxItem
+          checked={tuiMode}
+          onCheckedChange={(v) => setTuiMode(v === true)}
+        >
+          TUI-режим
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={tableView}
+          disabled={tuiMode}
+          onCheckedChange={(v) => setTableView(v === true)}
+        >
+          Табличный список (GUI)
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

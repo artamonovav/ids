@@ -50,7 +50,8 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   profile: { name: "", email: "" },
   recentLimit: 3,
   tuiMode: false,
-  tableView: false,
+  // Табличный список в GUI — по умолчанию включён.
+  tableView: true,
   fontScale: 100,
 }
 

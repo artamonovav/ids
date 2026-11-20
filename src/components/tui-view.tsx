@@ -43,28 +43,6 @@ const STATUS_MAP = {
   red: { text: "ОШИБКА СИНХРОНИЗАЦИИ", cls: "text-red-600 dark:text-red-400" },
 } as const
 
-/** ASCII-индикатор в духе btop: [██████░░░░] */
-function Gauge({
-  value,
-  total,
-  cls = "",
-}: {
-  value: number
-  total: number
-  cls?: string
-}) {
-  const width = 10
-  const filled =
-    total > 0 ? Math.min(width, Math.round((value / total) * width)) : 0
-  const bar = "█".repeat(filled) + "░".repeat(width - filled)
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0
-  return (
-    <span className={cls}>
-      [{bar}] {pct}%
-    </span>
-  )
-}
-
 /** Сократить путь: /home/user → ~ */
 function shortenPath(p: string): string {
   const home = p.match(/^\/home\/[^/]+/)
@@ -613,7 +591,7 @@ export function TuiView() {
       </div>
 
       {/* Индикаторы */}
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
         <div className="border border-border px-2 py-1">
           <span className="text-muted-foreground">ЛОКАЛИЗАЦИЙ </span>
           {totalKb}
@@ -621,20 +599,6 @@ export function TuiView() {
         <div className="border border-border px-2 py-1">
           <span className="text-muted-foreground">ЧЕРНОВИКИ </span>
           {drafts.length}
-        </div>
-        <div className="border border-border px-2 py-1">
-          <span className="text-muted-foreground">СИНХР </span>
-          <Gauge
-            value={totalKb + drafts.length - dirtyCount}
-            total={totalKb + drafts.length}
-            cls={
-              syncStatus === "red"
-                ? "text-red-600 dark:text-red-400"
-                : dirtyCount > 0
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-emerald-600 dark:text-emerald-400"
-            }
-          />
         </div>
         <div className="border border-border px-2 py-1">
           <span className="text-muted-foreground">ПРОДУКТЫ </span>

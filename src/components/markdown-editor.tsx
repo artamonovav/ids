@@ -69,6 +69,9 @@ interface MarkdownEditorProps {
   onAddAttachment?: (a: Attachment) => void
   initialMode?: Mode
   readOnly?: boolean
+  /** Занять всю доступную высоту родителя (flex) вместо фиксированных 70vh —
+   *  карточка локализации укладывается в окно без глобального скролла. */
+  fillHeight?: boolean
 }
 
 export type Mode = 'live' | 'split' | 'source' | 'preview'
@@ -201,7 +204,13 @@ export function MarkdownEditor({
   onAddAttachment,
   initialMode = 'live',
   readOnly = false,
+  fillHeight = false,
 }: MarkdownEditorProps) {
+  // Высота: фиксированные 70vh либо вся доступная высота родителя (flex).
+  const EDITOR_BOX = fillHeight ? 'h-full min-h-0' : EDITOR_HEIGHT
+  const TEXTAREA_CLASS_FULL = fillHeight
+    ? TEXTAREA_CLASS.replace(' min-h-[70vh]', '')
+    : TEXTAREA_CLASS
   const imageInputRef = React.useRef<HTMLInputElement>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [mode, setMode] = React.useState<Mode>(initialMode)
@@ -516,7 +525,7 @@ export function MarkdownEditor({
   React.useEffect(() => {
     if (readOnly) return
     const host = document.createElement('div')
-    host.className = 'h-full min-h-[70vh]'
+    host.className = fillHeight ? 'h-full' : 'h-full min-h-[70vh]'
     hostRef.current = host
 
     const extensions: Extension[] = [
@@ -615,7 +624,7 @@ export function MarkdownEditor({
   const renderSourceEditor = () => (
     <div
       ref={setEditorContainerNode}
-      className={`h-full min-h-[70vh] ${live ? '' : 'ids-md-source'}`}
+      className={`${fillHeight ? 'h-full' : 'h-full min-h-[70vh]'} ${live ? '' : 'ids-md-source'}`}
     />
   )
 
@@ -625,7 +634,7 @@ export function MarkdownEditor({
       onChange={(e) => onChange(e.target.value)}
       readOnly={readOnly}
       placeholder="Введите Markdown…"
-      className={TEXTAREA_CLASS}
+      className={TEXTAREA_CLASS_FULL}
     />
   )
 
@@ -648,6 +657,7 @@ export function MarkdownEditor({
         setMode={setMode}
         renderPreview={renderPreview}
         renderTextarea={renderTextarea}
+        editorBox={EDITOR_BOX}
       />
     )
   }
@@ -786,9 +796,9 @@ export function MarkdownEditor({
       )}
 
       {mode === 'preview' ? (
-        <div className={EDITOR_HEIGHT}>{renderPreview()}</div>
+        <div className={EDITOR_BOX}>{renderPreview()}</div>
       ) : mode === 'split' ? (
-        <PanelGroup direction="horizontal" className={EDITOR_HEIGHT}>
+        <PanelGroup direction="horizontal" className={EDITOR_BOX}>
           <Panel defaultSize={50} className="min-w-0 h-full">
             {renderSourceEditor()}
           </Panel>
@@ -798,7 +808,7 @@ export function MarkdownEditor({
           </Panel>
         </PanelGroup>
       ) : (
-        <div className={EDITOR_HEIGHT}>{renderSourceEditor()}</div>
+        <div className={EDITOR_BOX}>{renderSourceEditor()}</div>
       )}
 
       {/* Предпросмотр картинки из Live-режима (клик по изображению) */}
@@ -828,11 +838,13 @@ function ReadOnlyPanel({
   setMode,
   renderPreview,
   renderTextarea,
+  editorBox,
 }: {
   mode: Mode
   setMode: (m: Mode) => void
   renderPreview: () => ReactNode
   renderTextarea: () => ReactNode
+  editorBox: string
 }) {
   // В readOnly нет live-редактора: только просмотр и исходник.
   const effective: 'preview' | 'source' = mode === 'source' ? 'source' : 'preview'
@@ -858,7 +870,7 @@ function ReadOnlyPanel({
           Исходник
         </button>
       </div>
-      <div className={EDITOR_HEIGHT}>
+      <div className={editorBox}>
         {effective === 'preview' ? renderPreview() : renderTextarea()}
       </div>
     </>
