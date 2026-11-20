@@ -12,6 +12,7 @@ import * as React from "react"
 import { useStore, selectFolders, loadAttachments } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 import { MarkdownView } from "@/components/markdown-preview"
+import { VirtualList, type ListColumnDef, type ListSortKey } from "@/components/virtual-list"
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels"
 import { Eye, EyeOff, X } from "lucide-react"
 import {
@@ -114,7 +115,6 @@ export function TuiView() {
   // Фильтр «только не синхронизированные» (u / кнопка [ НЕ СИНХР ]).
   const [onlyUnsynced, setOnlyUnsynced] = React.useState(false)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
-  const listRef = React.useRef<HTMLDivElement | null>(null)
 
   // «Все» — от больших SPAS к меньшим (как в обычной рабочей области).
   const folders = React.useMemo(() => {
@@ -250,10 +250,10 @@ export function TuiView() {
   )
 
   interface Row {
-    id: string
+    key: string
     open: () => void
     file: Localization
-    render: () => React.ReactNode
+    dirty: boolean
   }
   const items: Row[] = React.useMemo(() => {
     if (tab === "kb") {
@@ -266,55 +266,12 @@ export function TuiView() {
         )
         .filter((f) => !term || rowText(f.main).includes(term))
         .sort(cmpFolder)
-        .map((f) => {
-          const fm = f.main.frontmatter
-          const dirty = f.files.some((x) => x.dirty)
-          const open = () => openFolder(f.number)
-          return {
-            id: f.number,
-            open,
-            file: f.main,
-            render: () => (
-              <>
-                <span
-                  className="w-24 lg:w-32 shrink-0 cursor-pointer truncate font-semibold hover:underline"
-                  title={`${f.number} — открыть`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    open()
-                  }}
-                >
-                  {f.number}
-                  {dirty && (
-                    <span
-                      className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
-                      title="Несинхронизировано"
-                    />
-                  )}
-                </span>
-                <span className="w-16 sm:w-24 shrink-0 truncate text-muted-foreground" title={fm.type}>
-                  {fm.type || "—"}
-                </span>
-                <span className="w-12 md:w-20 shrink-0 truncate text-muted-foreground" title={fm.environment}>
-                  {fm.environment || "—"}
-                </span>
-                <span className="hidden w-28 lg:w-40 shrink-0 truncate lg:block" title={fm.product.join(", ")}>
-                  {fm.product.join(" ") || "—"}
-                </span>
-                <span className="flex-1 min-w-0 truncate">{fm.symptom || "— без симптома —"}</span>
-                <span className="hidden w-36 shrink-0 truncate text-muted-foreground lg:block" title={fm.author}>
-                  {fm.author || "—"}
-                </span>
-                <span
-                  className="hidden w-32 shrink-0 text-right text-[11px] text-muted-foreground sm:block"
-                  title={`Обновлено ${fmtDate(f.updatedAt)}`}
-                >
-                  {fmtShort(f.updatedAt)}
-                </span>
-              </>
-            ),
-          }
-        })
+        .map((f) => ({
+          key: f.number,
+          open: () => openFolder(f.number),
+          file: f.main,
+          dirty: f.files.some((x) => x.dirty),
+        }))
     }
     return drafts
       .filter(
@@ -324,46 +281,100 @@ export function TuiView() {
           f.fileName.toLowerCase().includes(term)
       )
       .sort(cmp)
-      .map((f) => {
-        const open = () => openFile(f.id)
-        return {
-          id: f.id,
-          open,
-          file: f,
-        render: () => (
-          <>
-            <span
-              className="w-24 lg:w-32 shrink-0 cursor-pointer truncate font-semibold hover:underline"
-              title={`${f.fileName} — открыть`}
-              onClick={(e) => {
-                e.stopPropagation()
-                open()
-              }}
-            >
-              {f.frontmatter.number || f.fileName}
-            </span>
-            <span className="w-16 sm:w-24 shrink-0 truncate text-muted-foreground">.tmp</span>
-            <span className="w-12 md:w-20 shrink-0 truncate text-muted-foreground">
-              {f.frontmatter.type || "—"}
-            </span>
-            <span className="hidden w-28 lg:w-40 shrink-0 truncate lg:block" title={f.frontmatter.product.join(", ")}>
-              {f.frontmatter.product.join(" ") || "—"}
-            </span>
-            <span className="flex-1 min-w-0 truncate">{f.frontmatter.symptom || "— без симптома —"}</span>
-            <span className="hidden w-36 shrink-0 truncate text-muted-foreground lg:block" title={f.frontmatter.author}>
-              {f.frontmatter.author || "—"}
-            </span>
-            <span
-              className="hidden w-32 shrink-0 text-right text-[11px] text-muted-foreground sm:block"
-              title={`Обновлено ${fmtDate(f.updatedAt)}`}
-            >
-              {fmtShort(f.updatedAt)}
-            </span>
-          </>
-        ),
-        }
-      })
+      .map((f) => ({
+        key: f.id,
+        open: () => openFile(f.id),
+        file: f,
+        dirty: f.dirty,
+      }))
   }, [tab, folders, drafts, term, openFolder, openFile, cmp, cmpFolder, onlyUnsynced, unsyncedExternal])
+
+  // Колонки TUI-списка — тот же состав и ключи, что у GUI-таблицы.
+  const listColumns: ListColumnDef<Row>[] = [
+    {
+      key: "number",
+      label: "Номер",
+      cls: "w-24 lg:w-32 shrink-0",
+      render: (r) => r.file.number || r.file.fileName,
+    },
+    {
+      key: "type",
+      label: "Тип",
+      cls: "w-16 sm:w-24 shrink-0 truncate text-muted-foreground",
+      render: (r) => r.file.frontmatter.type || "—",
+    },
+    {
+      key: "environment",
+      label: "Окр.",
+      cls: "w-12 md:w-20 shrink-0 truncate text-muted-foreground",
+      render: (r) => r.file.frontmatter.environment || "—",
+    },
+    {
+      key: "product",
+      label: "Продукты",
+      cls: "hidden w-28 lg:w-40 shrink-0 truncate lg:block",
+      render: (r) => r.file.frontmatter.product.join(" ") || "—",
+      title: (r) => r.file.frontmatter.product.join(", "),
+    },
+    {
+      key: "symptom",
+      label: "Симптом",
+      cls: "flex-1 min-w-0 truncate",
+      render: (r) => r.file.frontmatter.symptom || "— без симптома —",
+    },
+    {
+      key: "author",
+      label: "Автор",
+      cls: "hidden w-36 shrink-0 truncate text-muted-foreground lg:block",
+      render: (r) => r.file.frontmatter.author || "—",
+      title: (r) => r.file.frontmatter.author ?? "",
+    },
+    {
+      key: "updatedAt",
+      label: "Обновлено",
+      cls: "hidden w-32 shrink-0 text-right text-[11px] text-muted-foreground sm:block",
+      render: (r) => fmtShort(r.file.updatedAt),
+      title: (r) => `Обновлено ${fmtDate(r.file.updatedAt)}`,
+    },
+  ]
+
+  const list = (
+    <VirtualList
+      items={items}
+      columns={listColumns}
+      rowKey={(r) => r.key}
+      selectedIdx={sel}
+      onSelect={setSel}
+      onNumberClick={(r) => r.open()}
+      onRowClick={(r, idx) => {
+        // Клик по любому полю (кроме номера) — выбор + предпросмотр.
+        setSel(idx)
+        setPreviewOpen(true)
+      }}
+      numberCell={(r) => (
+        <>
+          {r.file.number || r.file.fileName}
+          {r.dirty && (
+            <span
+              className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
+              title="Несинхронизировано"
+            />
+          )}
+        </>
+      )}
+      numberTitle={(r) => `${r.file.number || r.file.fileName} — открыть`}
+      variant="tui"
+      sortKey={sortKey}
+      sortDir={sortDir}
+      onSort={toggleSort}
+      emptyText={
+        term
+          ? "Ничего не найдено. Esc — сбросить фильтр."
+          : "Пусто. n — новый черновик."
+      }
+    />
+  )
+
 
   // Фильтр/вкладка/сортировка изменились → курсор в начало (сортировка
   // тоже сбрасывает: строки меняются местами).
@@ -371,40 +382,6 @@ export function TuiView() {
     setSel(0)
   }, [tab, term, sortKey, sortDir, onlyUnsynced])
 
-  // Виртуализация списка: рендерятся только видимые строки (+запас).
-  // Высота строки фиксированная — позиция считается по scrollTop.
-  const ROW_H = 28 // h-7
-  const OVERSCAN = 10
-  // Позиция скролла читается ПРЯМО из DOM во время рендера (onScroll лишь
-  // дёргает перерисовку) — окно виртуализации всегда точное.
-  const [, bumpListScroll] = React.useReducer((x: number) => x + 1, 0)
-  const onListScroll = React.useCallback(() => bumpListScroll(), [])
-  React.useEffect(() => {
-    const onResize = () => bumpListScroll()
-    window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
-  }, [])
-  const listEl = listRef.current
-  const scrollTop = listEl ? listEl.scrollTop : 0
-  const viewH = listEl ? listEl.clientHeight : 400
-  const winStart = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN)
-  const winEnd = Math.min(
-    items.length,
-    Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN
-  )
-
-  // Выбранная строка всегда в зоне видимости (прямая прокрутка — надёжнее
-  // scrollIntoView при виртуализации: строка может быть ещё не отрендерена).
-  React.useEffect(() => {
-    const el = listRef.current
-    if (!el || items.length === 0) return
-    const target = sel * ROW_H
-    if (target < el.scrollTop) {
-      el.scrollTop = target
-    } else if (target + ROW_H > el.scrollTop + el.clientHeight) {
-      el.scrollTop = target + ROW_H - el.clientHeight
-    }
-  }, [sel, items.length])
 
   const totalKb = files.filter((f) => f.number).length
   const dirtyCount = files.filter((f) => f.dirty).length
@@ -453,7 +430,7 @@ export function TuiView() {
     }
     const item = items[sel]
     if (!item) return
-    const f = drafts.find((x) => x.id === item.id)
+    const f = drafts.find((x) => x.id === item.key)
     if (f) setDeleteTarget({ id: f.id, name: f.fileName })
   }
 
@@ -539,89 +516,6 @@ export function TuiView() {
     return () => window.removeEventListener("keydown", onKey)
   })
 
-  /** Заголовок колонок списка — кликабельный (сортировка), залипает при
-   *  прокрутке. Общий для вкладок. */
-  const columnHeader = (
-    <div
-      className="flex h-6 items-center gap-2 border-b border-border bg-background px-2 text-[11px] text-muted-foreground"
-    >
-      {(
-        [
-          ["number", "Номер", "w-24 lg:w-32 shrink-0"],
-          ["type", "Тип", "w-16 sm:w-24 shrink-0"],
-          ["environment", "Окр.", "w-12 md:w-20 shrink-0"],
-          ["product", "Продукты", "hidden w-40 shrink-0 lg:block"],
-          ["symptom", "Симптом", "flex-1"],
-          ["author", "Автор", "hidden w-36 shrink-0 lg:block"],
-          ["updatedAt", "Обновлено", "hidden w-24 shrink-0 text-right sm:block"],
-        ] as const
-      ).map(([key, label, cls]) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => toggleSort(key)}
-          title="Сортировать"
-          className={`shrink-0 text-left hover:text-foreground ${cls} ${key === "symptom" ? "flex-1" : ""}`}
-        >
-          {label}
-          {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
-        </button>
-      ))}
-
-    </div>
-  )
-
-  const list = (
-    <div className="relative min-h-0 flex-1 border border-border">
-      {columnHeader}
-      <div
-        ref={listRef}
-        onScroll={onListScroll}
-        className="absolute inset-x-0 bottom-0 top-6 overflow-y-auto"
-        role="listbox"
-        aria-label="Список локализаций"
-      >
-        {items.length === 0 ? (
-          <p className="px-2 py-4 text-muted-foreground">
-            {term ? "Ничего не найдено. Esc — сбросить фильтр." : "Пусто. n — новый черновик."}
-          </p>
-        ) : (
-          <>
-            <div style={{ height: winStart * ROW_H }} aria-hidden />
-            {items.slice(winStart, winEnd).map((item, i) => (
-              <div
-                key={item.id}
-                data-idx={winStart + i}
-                role="option"
-                aria-selected={winStart + i === sel}
-                tabIndex={0}
-                onClick={() => {
-                  // Клик по любому полю (кроме номера) — выбор + предпросмотр.
-                  setSel(winStart + i)
-                  setPreviewOpen(true)
-                }}
-                onFocus={() => setSel(winStart + i)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    item.open()
-                  }
-                }}
-                className={`flex h-7 cursor-pointer items-center gap-2 px-2 ${
-                  winStart + i === sel
-                    ? "bg-accent text-accent-foreground outline-none"
-                    : "hover:bg-accent/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                }`}
-              >
-                {item.render()}
-              </div>
-            ))}
-            <div style={{ height: (items.length - winEnd) * ROW_H }} aria-hidden />
-          </>
-        )}
-      </div>
-    </div>
-  )
 
   const preview = activeActual ? (
     <div className="flex h-full flex-col overflow-hidden border border-border bg-background">

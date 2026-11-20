@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { MarkdownView } from "@/components/markdown-preview"
+import { VirtualList, type ListColumnDef, type ListSortKey } from "@/components/virtual-list"
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels"
 import { Eye, EyeOff, X } from "lucide-react"
 import {
@@ -49,15 +50,7 @@ type Mode = "drafts" | "all"
 
 const PAGE = 10 // карточек на страницу (режим карточек)
 
-/** Колонки таблицы, доступные для сортировки. */
-type SortKey =
-  | "number"
-  | "type"
-  | "environment"
-  | "product"
-  | "symptom"
-  | "author"
-  | "updatedAt"
+type SortKey = ListSortKey
 
 interface DeleteTarget {
   description: string
@@ -264,31 +257,6 @@ export function WorkspaceView() {
   // скроллится внутри своей области на весь отфильтрованный список.
   const fixedLayout = tableView && mode !== "drafts"
 
-  // Виртуализация таблицы: рендерятся только видимые строки (+запас).
-  // Высота строки фиксированная (h-8), позиция скролла читается ПРЯМО из DOM
-  // во время рендера (onScroll/ресайз лишь дёргают перерисовку) — в этом
-  // WebKitGTK обновление через setState отставало и строки пропадали.
-  const ROW_H = 32 // h-8
-  const OVERSCAN = 10
-  const scrollRef = React.useRef<HTMLDivElement | null>(null)
-  const [, bumpTableScroll] = React.useReducer((x: number) => x + 1, 0)
-  const onTableScroll = React.useCallback(() => bumpTableScroll(), [])
-  React.useEffect(() => {
-    const onResize = () => bumpTableScroll()
-    window.addEventListener("resize", onResize)
-    return () => window.removeEventListener("resize", onResize)
-  }, [])
-  const scrollEl = scrollRef.current
-  const scrollTop = scrollEl ? scrollEl.scrollTop : 0
-  const viewH = scrollEl ? scrollEl.clientHeight : 600
-  const winStart = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN)
-  const winEnd = Math.min(
-    visibleFolders.length,
-    Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN
-  )
-  const topPad = winStart * ROW_H
-  const bottomPad = Math.max(0, visibleFolders.length - winEnd) * ROW_H
-
   const activeFolder = React.useMemo(
     () =>
       activeNumber
@@ -347,111 +315,89 @@ export function WorkspaceView() {
     })
   }
 
-  /** Таблица локализаций (табличный режим). Структура — как у списка TUI
-   *  (flex-шапка + absolute-скролл, строки фиксированной высоты): на этом
-   *  WebKitGTK вложенные flex-высоты и виртуализация <table> ненадёжны. */
-  const tableEl = (
-    <div className="flex h-full min-h-0 flex-col">
-      <div
-        className="flex h-7 shrink-0 items-center gap-2 border-b bg-muted px-3 text-xs text-muted-foreground"
-        data-testid="table-head"
-      >
-        {(
-          [
-            ["number", "Номер", "w-24 lg:w-32 shrink-0"],
-            ["type", "Тип", "w-16 sm:w-24 shrink-0"],
-            ["environment", "Окр.", "w-12 md:w-20 shrink-0"],
-            ["product", "Продукты", "hidden w-28 lg:w-40 shrink-0 lg:block"],
-            ["symptom", "Симптом", "flex-1 min-w-0"],
-            ["author", "Автор", "hidden w-36 shrink-0 lg:block"],
-            ["updatedAt", "Обновлено", "hidden w-32 shrink-0 text-right sm:block"],
-          ] as const
-        ).map(([key, label, cls]) => (
-          <button
-            key={key}
-            type="button"
-            role="columnheader"
-            onClick={() => toggleSort(key)}
-            title="Сортировать"
-            className={`shrink-0 text-left hover:text-foreground ${cls} ${key === "symptom" ? "flex-1" : ""}`}
-          >
-            {label}
-            {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
-          </button>
-        ))}
-      </div>
-      <div
-        ref={scrollRef}
-        onScroll={onTableScroll}
-        className="min-h-0 flex-1 overflow-auto"
-      >
-        {topPad > 0 && <div style={{ height: topPad }} aria-hidden />}
-        {visibleFolders.slice(winStart, winEnd).map((f, i) => {
-          const fm = f.main.frontmatter
-          const dirty = f.files.some((x) => x.dirty)
-          const idx = winStart + i
-          return (
-            <div
-              key={f.number}
-              data-idx={idx}
-              onClick={() => {
-                // Клик по строке — выбор + предпросмотр; номер — открыть.
-                setActiveNumber(f.number)
-                setPreviewOpen(true)
-              }}
-              onDoubleClick={() => openFolder(f.number)}
-              className={`flex h-8 cursor-pointer items-center gap-2 px-3 text-sm ${
-                activeNumber === f.number ? "bg-accent/40" : "hover:bg-accent/50"
-              }`}
-            >
-              <span
-                className="w-24 lg:w-32 shrink-0 cursor-pointer truncate font-mono font-semibold hover:underline"
-                title={`Открыть ${f.number}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  openFolder(f.number)
-                }}
-              >
-                {f.number}
-                {dirty && (
-                  <span
-                    className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
-                    title="Несинхронизировано"
-                  />
-                )}
-              </span>
-              <span className="w-16 sm:w-24 shrink-0 truncate">{fm.type}</span>
-              <span className="w-12 md:w-20 shrink-0 truncate text-muted-foreground">
-                {fm.environment}
-              </span>
-              <span
-                className="hidden w-28 lg:w-40 shrink-0 truncate font-mono text-xs text-muted-foreground lg:block"
-                title={fm.product.join(", ")}
-              >
-                {fm.product.join(", ") || "—"}
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                {fm.symptom || "— без описания симптома —"}
-              </span>
-              <span
-                className="hidden w-36 shrink-0 truncate text-xs text-muted-foreground lg:block"
-                title={fm.author}
-              >
-                {fm.author || "— без автора —"}
-              </span>
-              <span
-                className="hidden w-32 shrink-0 text-right text-xs text-muted-foreground sm:block"
-                title={`Обновлено ${fmtDate(f.updatedAt)}`}
-              >
-                {fmtDate(f.updatedAt)}
-              </span>
-            </div>
-          )
-        })}
-        {bottomPad > 0 && <div style={{ height: bottomPad }} aria-hidden />}
-      </div>
-    </div>
-  )
+  /** Колонки GUI-таблицы — тот же состав и ключи, что у TUI-списка. */
+  const listColumns: ListColumnDef<(typeof folders)[number]>[] = [
+    {
+      key: "number",
+      label: "Номер",
+      cls: "w-24 lg:w-32 shrink-0",
+      render: (f) => f.number,
+    },
+    {
+      key: "type",
+      label: "Тип",
+      cls: "w-16 sm:w-24 shrink-0 truncate",
+      render: (f) => f.main.frontmatter.type || "—",
+      title: (f) => f.main.frontmatter.type ?? "",
+    },
+    {
+      key: "environment",
+      label: "Окр.",
+      cls: "w-12 md:w-20 shrink-0 truncate text-muted-foreground",
+      render: (f) => f.main.frontmatter.environment || "—",
+    },
+    {
+      key: "product",
+      label: "Продукты",
+      cls: "hidden w-28 lg:w-40 shrink-0 truncate font-mono text-xs text-muted-foreground lg:block",
+      render: (f) => f.main.frontmatter.product.join(", ") || "—",
+      title: (f) => f.main.frontmatter.product.join(", "),
+    },
+    {
+      key: "symptom",
+      label: "Симптом",
+      cls: "min-w-0 flex-1 truncate",
+      render: (f) => f.main.frontmatter.symptom || "— без описания симптома —",
+    },
+    {
+      key: "author",
+      label: "Автор",
+      cls: "hidden w-36 shrink-0 truncate text-xs text-muted-foreground lg:block",
+      render: (f) => f.main.frontmatter.author || "— без автора —",
+      title: (f) => f.main.frontmatter.author ?? "",
+    },
+    {
+      key: "updatedAt",
+      label: "Обновлено",
+      cls: "hidden w-32 shrink-0 text-right text-xs text-muted-foreground sm:block",
+      render: (f) => fmtDate(f.updatedAt),
+      title: (f) => `Обновлено ${fmtDate(f.updatedAt)}`,
+    },
+  ]
+
+  const listProps = {
+    items: sortedFolders,
+    columns: listColumns,
+    rowKey: (f: (typeof folders)[number]) => f.number,
+    selectedIdx: activeNumber
+      ? sortedFolders.findIndex((f) => f.number === activeNumber)
+      : -1,
+    onSelect: (idx: number) =>
+      setActiveNumber(sortedFolders[idx]?.number ?? null),
+    onNumberClick: (f: (typeof folders)[number]) => openFolder(f.number),
+    onRowClick: (f: (typeof folders)[number]) => {
+      // Клик по любому полю (кроме номера) — выбор + предпросмотр.
+      setActiveNumber(f.number)
+      setPreviewOpen(true)
+    },
+    numberCell: (f: (typeof folders)[number]) => (
+      <>
+        {f.number}
+        {f.files.some((x) => x.dirty) && (
+          <span
+            className="ml-1.5 inline-block size-2 rounded-full bg-amber-500 align-middle"
+            title="Несинхронизировано"
+          />
+        )}
+      </>
+    ),
+    numberTitle: (f: (typeof folders)[number]) => `Открыть ${f.number}`,
+    sortKey,
+    sortDir,
+    onSort: toggleSort,
+    emptyText: "Ничего не найдено. Измените запрос.",
+    headTestId: "table-head",
+  }
 
   /** Шторка предпросмотра активной записи (табличный режим). */
   const previewPanel = activeActual ? (
@@ -659,9 +605,7 @@ export function WorkspaceView() {
               <div className="min-h-0 flex-1">
                 <PanelGroup direction="horizontal" className="h-full">
                   <Panel defaultSize={33} minSize={15} className="flex min-w-0 flex-col overflow-hidden">
-                    <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
-                      {tableEl}
-                    </div>
+                    <VirtualList {...listProps} variant="gui" />
                   </Panel>
                   <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors rounded-none mx-0.5" />
                   <Panel defaultSize={67} minSize={30} className="flex min-w-0 flex-col overflow-hidden">
@@ -670,9 +614,7 @@ export function WorkspaceView() {
                 </PanelGroup>
               </div>
             ) : (
-              <div className="relative min-h-0 flex-1 rounded-md border overflow-hidden">
-                <div className="absolute inset-0 overflow-y-auto">{tableEl}</div>
-              </div>
+              <VirtualList {...listProps} variant="gui" />
             )
           ) : (
             <div className="grid gap-2">
