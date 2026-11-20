@@ -404,7 +404,7 @@ export function WorkspaceView() {
 
   /** Шторка предпросмотра активной записи (табличный режим). */
   const previewPanel = activeActual ? (
-    <div className="flex h-[calc(100vh-15rem)] min-h-[400px] flex-col overflow-hidden border border-border bg-background">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border border-border bg-background">
       <div className="flex items-start justify-between gap-2 border-b px-3 py-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -435,9 +435,12 @@ export function WorkspaceView() {
     </div>
   )
 
+  // С открытой шторкой предпросмотра — flex-колонка под высоту окна:
+  // панели занимают остаток, элементы управления и пагинация всегда видны
+  // (страница не скроллится). Без шторки — обычный поток.
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className={showPreview ? "flex h-[calc(100vh-8rem)] flex-col gap-3" : "space-y-4"}>
+      <div className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${showPreview ? "shrink-0" : ""}`}>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Локализации проблем</h1>
           <p className="text-xs text-muted-foreground">
@@ -458,7 +461,7 @@ export function WorkspaceView() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <div className={`flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between ${showPreview ? "shrink-0" : ""}`}>
         <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
           <TabsList className="h-8">
             <TabsTrigger value="all" className="text-xs">Все</TabsTrigger>
@@ -591,19 +594,23 @@ export function WorkspaceView() {
             </div>
           )}
 
+          {/* Панельная область: занимает остаток высоты (flex-1 min-h-0),
+              как в TUI — элементы управления и пагинация не скроллятся. */}
           {visibleFolders.length > 0 && (tableView ? (
             showPreview ? (
-              <PanelGroup direction="horizontal" className="h-[calc(100vh-15rem)] min-h-[400px]">
-                <Panel defaultSize={33} minSize={15} className="min-w-0">
-                  <div className="h-[calc(100vh-15rem)] min-h-[400px] overflow-y-auto rounded-md border">
-                    {tableEl}
-                  </div>
-                </Panel>
-                <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors rounded-none mx-0.5" />
-                <Panel defaultSize={67} minSize={30} className="min-w-0">
-                  {previewPanel}
-                </Panel>
-              </PanelGroup>
+              <div className="min-h-0 flex-1">
+                <PanelGroup direction="horizontal" className="h-full">
+                  <Panel defaultSize={33} minSize={15} className="min-w-0 overflow-hidden">
+                    <div className="h-full overflow-y-auto rounded-md border">
+                      {tableEl}
+                    </div>
+                  </Panel>
+                  <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors rounded-none mx-0.5" />
+                  <Panel defaultSize={67} minSize={30} className="min-w-0 overflow-hidden">
+                    {previewPanel}
+                  </Panel>
+                </PanelGroup>
+              </div>
             ) : (
               tableEl
             )
@@ -684,7 +691,7 @@ export function WorkspaceView() {
           ))}
 
           {mode === "all" && (
-            <div className="flex items-center justify-center gap-3 py-1">
+            <div className={`flex items-center justify-center gap-3 py-1 ${showPreview ? "shrink-0" : ""}`}>
               <Button
                 variant="outline"
                 size="sm"
