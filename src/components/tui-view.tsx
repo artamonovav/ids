@@ -28,6 +28,15 @@ import type { Localization } from "@/lib/types"
 
 type Tab = "kb" | "tmp"
 
+/** Колонки TUI-списка, доступные для сортировки. */
+type SortKey =
+  | "number"
+  | "type"
+  | "environment"
+  | "product"
+  | "status"
+  | "symptom"
+
 const STATUS_MAP = {
   green: { text: "СИНХРОНИЗИРОВАНО", cls: "text-emerald-600 dark:text-emerald-400" },
   yellow: { text: "ЕСТЬ ИЗМЕНЕНИЯ", cls: "text-amber-600 dark:text-amber-400" },
@@ -107,6 +116,12 @@ export function TuiView() {
   const [sel, setSel] = React.useState(0)
   const [previewOpen, setPreviewOpen] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<{ id: string; name: string } | null>(null)
+  // Сортировка списка по колонкам (как в GUI-таблице). По умолчанию —
+  // номер по убыванию (большие SPAS сверху).
+  const [sortKey, setSortKey] = React.useState<SortKey>("number")
+  const [sortDir, setSortDir] = React.useState<1 | -1>(-1)
+  // Фильтр «только не синхронизированные» (u / кнопка [ НЕ СИНХР ]).
+  const [onlyUnsynced, setOnlyUnsynced] = React.useState(false)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
   const listRef = React.useRef<HTMLDivElement | null>(null)
 
@@ -123,6 +138,111 @@ export function TuiView() {
   )
 
   const term = q.trim().toLowerCase()
+
+  /** Компаратор колонок: строки — по-русски, номер — по числу, статус —
+   *  несинхронизированные выше при убывании. */
+  const cmp = React.useCallback(
+    (a: Localization, b: Localization): number => {
+      let r = 0
+      switch (sortKey) {
+        case "number":
+          r =
+            (parseInt(a.number.replace(/\D/g, ""), 10) || 0) -
+            (parseInt(b.number.replace(/\D/g, ""), 10) || 0)
+          break
+        case "type":
+          r = (a.frontmatter.type || "").localeCompare(b.frontmatter.type || "", "ru")
+          break
+        case "environment":
+          r = (a.frontmatter.environment || "").localeCompare(
+            b.frontmatter.environment || "",
+            "ru"
+          )
+          break
+        case "product":
+          r = a.frontmatter.product
+            .join(", ")
+            .localeCompare(b.frontmatter.product.join(", "), "ru")
+          break
+        case "status":
+          r =
+            Number(a.dirty || !a.number) - Number(b.dirty || !b.number)
+          break
+        case "symptom":
+          r = (a.frontmatter.symptom || "").localeCompare(
+            b.frontmatter.symptom || "",
+            "ru"
+          )
+          break
+      }
+      return r * sortDir
+    },
+    [sortKey, sortDir]
+  )
+
+  /** Компаратор папок (вкладка «Локализации») — статусы берутся из файлов. */
+  const cmpFolder = React.useCallback(
+    (
+      a: { number: string; files: Localization[]; main: Localization },
+      b: { number: string; files: Localization[]; main: Localization },
+    ): number => {
+      let r = 0
+      const num = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0
+      switch (sortKey) {
+        case "number":
+          r = num(a.number) - num(b.number)
+          break
+        case "type":
+          r = (a.main.frontmatter.type || "").localeCompare(
+            b.main.frontmatter.type || "",
+            "ru"
+          )
+          break
+        case "environment":
+          r = (a.main.frontmatter.environment || "").localeCompare(
+            b.main.frontmatter.environment || "",
+            "ru"
+          )
+          break
+        case "product":
+          r = a.main.frontmatter.product
+            .join(", ")
+            .localeCompare(b.main.frontmatter.product.join(", "), "ru")
+          break
+        case "status":
+          r =
+            Number(a.files.some((x) => x.dirty)) -
+            Number(b.files.some((x) => x.dirty))
+          break
+        case "symptom":
+          r = (a.main.frontmatter.symptom || "").localeCompare(
+            b.main.frontmatter.symptom || "",
+            "ru"
+          )
+          break
+      }
+      return r * sortDir
+    },
+    [sortKey, sortDir]
+  )
+
+  /** Клик по заголовку: та же колонка — сменить направление; новая —
+   *  естественное направление (строки — А→Я, номер/статус — по убыванию). */
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 1 ? -1 : 1))
+    } else {
+      setSortKey(key)
+      setSortDir(key === "number" || key === "status" ? -1 : 1)
+    }
+    setSel(0)
+  }
+
+  const unsyncedKbCount = React.useMemo(
+    () => folders.filter((f) => f.files.some((x) => x.dirty)).length,
+    [folders]
+  )
+
   interface Row {
     id: string
     open: () => void
@@ -132,7 +252,9 @@ export function TuiView() {
   const items: Row[] = React.useMemo(() => {
     if (tab === "kb") {
       return folders
+        .filter((f) => !onlyUnsynced || f.files.some((x) => x.dirty))
         .filter((f) => !term || rowText(f.main).includes(term))
+        .sort(cmpFolder)
         .map((f) => {
           const fm = f.main.frontmatter
           const dirty = f.files.some((x) => x.dirty)
@@ -178,6 +300,7 @@ export function TuiView() {
           rowText(f).includes(term) ||
           f.fileName.toLowerCase().includes(term)
       )
+      .sort(cmp)
       .map((f) => {
         const open = () => openFile(f.id)
         return {
@@ -211,12 +334,13 @@ export function TuiView() {
         ),
         }
       })
-  }, [tab, folders, drafts, term, openFolder, openFile])
+  }, [tab, folders, drafts, term, openFolder, openFile, cmp, cmpFolder, onlyUnsynced])
 
-  // Фильтр/вкладка изменились → курсор в начало.
+  // Фильтр/вкладка/сортировка изменились → курсор в начало (сортировка
+  // тоже сбрасывает: строки меняются местами).
   React.useEffect(() => {
     setSel(0)
-  }, [tab, term])
+  }, [tab, term, sortKey, sortDir, onlyUnsynced])
 
   // Выбранная строка всегда в зоне видимости.
   React.useEffect(() => {
@@ -323,6 +447,9 @@ export function TuiView() {
         case "v":
           e.preventDefault()
           return setPreviewOpen((p) => !p)
+        case "u":
+          e.preventDefault()
+          return setOnlyUnsynced((p) => !p)
         case "/":
           e.preventDefault()
           setSearchMode(true)
@@ -350,18 +477,33 @@ export function TuiView() {
     return () => window.removeEventListener("keydown", onKey)
   })
 
-  /** Заголовок колонок списка (общий для вкладок). */
+  /** Заголовок колонок списка — кликабельный (сортировка), залипает при
+   *  прокрутке. Общий для вкладок. */
   const columnHeader = (
     <div
       className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background px-2 py-1 text-[11px] text-muted-foreground"
-      aria-hidden
     >
-      <span className="w-24 lg:w-32 shrink-0">Номер</span>
-      <span className="w-16 sm:w-24 shrink-0">Тип</span>
-      <span className="w-12 md:w-20 shrink-0">Окр.</span>
-      <span className="hidden w-40 lg:block">Продукты</span>
-      <span className="w-14 shrink-0">Стат.</span>
-      <span className="flex-1">Симптом</span>
+      {(
+        [
+          ["number", "Номер", "w-24 lg:w-32 shrink-0"],
+          ["type", "Тип", "w-16 sm:w-24 shrink-0"],
+          ["environment", "Окр.", "w-12 md:w-20 shrink-0"],
+          ["product", "Продукты", "hidden w-40 lg:block"],
+          ["status", "Стат.", "w-14 shrink-0"],
+          ["symptom", "Симптом", "flex-1"],
+        ] as const
+      ).map(([key, label, cls]) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => toggleSort(key)}
+          title="Сортировать"
+          className={`shrink-0 text-left hover:text-foreground ${cls} ${key === "symptom" ? "flex-1" : ""}`}
+        >
+          {label}
+          {sortKey === key && (sortDir === 1 ? " ▲" : " ▼")}
+        </button>
+      ))}
     </div>
   )
 
@@ -517,6 +659,20 @@ export function TuiView() {
           >
             [ ЧЕРНОВИКИ {drafts.length} ]
           </button>
+          <button
+            type="button"
+            onClick={() => setOnlyUnsynced((p) => !p)}
+            title="Показать только не синхронизированные (u)"
+            className={`px-2 ${
+              onlyUnsynced
+                ? "bg-amber-500/20 font-bold text-amber-600 dark:text-amber-400"
+                : unsyncedKbCount > 0
+                  ? "text-amber-600/80 dark:text-amber-400/80"
+                  : "text-muted-foreground"
+            }`}
+          >
+            [ НЕ СИНХР {unsyncedKbCount} ]
+          </button>
         </div>
         <div className="flex items-center gap-2">
           {searchMode ? (
@@ -584,6 +740,7 @@ export function TuiView() {
           <span><b className="text-foreground">s</b> синк</span>
           <span><b className="text-foreground">d</b> удалить (черновики)</span>
           <span><b className="text-foreground">v</b> предпросмотр</span>
+          <span><b className="text-foreground">u</b> не синхр.</span>
           <span><b className="text-foreground">/</b> поиск</span>
           <span><b className="text-foreground">Tab</b> обход элементов</span>
           <span><b className="text-foreground">q</b> выход</span>
