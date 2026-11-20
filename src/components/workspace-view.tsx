@@ -38,7 +38,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { Type } from "@/lib/types"
 
-const PAGE = 10
 
 const TYPE_BADGE: Record<string, "destructive" | "secondary" | "outline"> = {
   Дефект: "destructive",
@@ -124,8 +123,6 @@ export function WorkspaceView() {
   const [q, setQ] = React.useState("")
   const [type, setType] = React.useState<"all" | Type>("all")
   const [mode, setMode] = React.useState<Mode>("all")
-  // Пагинация «Все»: перелистывание страниц вместо «показать ещё».
-  const [page, setPage] = React.useState(1)
   // Шторка предпросмотра в табличном режиме (клик по полям, кроме номера).
   const [activeNumber, setActiveNumber] = React.useState<string | null>(null)
   const [previewOpen, setPreviewOpen] = React.useState(false)
@@ -226,7 +223,6 @@ export function WorkspaceView() {
       setSortKey(key)
       setSortDir(key === "number" || key === "updatedAt" ? -1 : 1)
     }
-    setPage(1)
   }
 
   const filteredTemps = React.useMemo(
@@ -240,18 +236,10 @@ export function WorkspaceView() {
     [tempDrafts, term]
   )
 
-  React.useEffect(() => {
-    setPage(1)
-  }, [mode, q, type])
 
   const showTemps = mode === "drafts"
-  // «Все» — перелистывающая пагинация; черновики показываются отдельно.
-  const pages = Math.max(1, Math.ceil(sortedFolders.length / PAGE))
-  const safePage = Math.min(page, pages)
-  const visibleFolders =
-    mode === "drafts"
-      ? []
-      : sortedFolders.slice((safePage - 1) * PAGE, safePage * PAGE)
+  // «Все» — полный список; скролл внутри таблицы (как в TUI), без пагинации.
+  const visibleFolders = mode === "drafts" ? [] : sortedFolders
   const hasAny =
     visibleFolders.length > 0 || (showTemps && filteredTemps.length > 0)
 
@@ -318,10 +306,10 @@ export function WorkspaceView() {
 
   /** Таблица локализаций (табличный режим). */
   const tableEl = (
-    <div className="overflow-x-auto rounded-md border">
+    <div>
       <table className="w-full text-sm">
 <thead>
-                  <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
+                  <tr className="border-b text-left text-xs text-muted-foreground">
                     {(
                       [
                         ["number", "Номер", "px-3 py-2"],
@@ -336,7 +324,7 @@ export function WorkspaceView() {
                       <th
                         key={key}
                         scope="col"
-                        className={`cursor-pointer select-none whitespace-nowrap font-medium hover:text-foreground ${cls}`}
+                        className={`sticky top-0 z-10 cursor-pointer select-none whitespace-nowrap border-b bg-muted font-medium hover:bg-muted hover:text-foreground ${cls}`}
                         onClick={() => toggleSort(key)}
                         title="Сортировать"
                       >
@@ -603,19 +591,21 @@ export function WorkspaceView() {
             showPreview ? (
               <div className="min-h-0 flex-1">
                 <PanelGroup direction="horizontal" className="h-full">
-                  <Panel defaultSize={33} minSize={15} className="min-w-0 overflow-hidden">
-                    <div className="h-full overflow-y-auto rounded-md border">
+                  <Panel defaultSize={33} minSize={15} className="flex min-w-0 flex-col overflow-hidden">
+                    <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
                       {tableEl}
                     </div>
                   </Panel>
                   <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors rounded-none mx-0.5" />
-                  <Panel defaultSize={67} minSize={30} className="min-w-0 overflow-hidden">
+                  <Panel defaultSize={67} minSize={30} className="flex min-w-0 flex-col overflow-hidden">
                     {previewPanel}
                   </Panel>
                 </PanelGroup>
               </div>
             ) : (
-              tableEl
+              <div className="relative min-h-0 flex-1 rounded-md border">
+                <div className="absolute inset-0 overflow-y-auto">{tableEl}</div>
+              </div>
             )
           ) : (
             <div className="grid gap-2">
@@ -693,29 +683,6 @@ export function WorkspaceView() {
             </div>
           ))}
 
-          {mode === "all" && (
-            <div className={`flex items-center justify-center gap-3 py-1 ${showPreview ? "shrink-0" : ""}`}>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={safePage <= 1}
-                onClick={() => setPage(safePage - 1)}
-              >
-                ‹ Назад
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                Стр. {safePage} из {pages} ({sortedFolders.length})
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={safePage >= pages}
-                onClick={() => setPage(safePage + 1)}
-              >
-                Вперёд ›
-              </Button>
-            </div>
-          )}
         </>
       )}
 
